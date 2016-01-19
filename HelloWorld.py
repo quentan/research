@@ -23,13 +23,13 @@ class CircularROI(ScriptedLoadableModule):
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
 
-        self.parent.title = 'Circular ROI'
+        self.parent.title = 'Hello World!'
         self.parent.categories = ['Examples']
         self.parent.dependencies = []
         self.parent.contributors = ["Quentan Qi (Hull University)"]
         self.parent.helpText = """
-        An example from Script Repository. It produces a circular Region of Interest.
-        See: http://wiki.slicer.org/slicerWiki/index.php/Documentation/4.5/ScriptRepository
+        An example from Script Repository. It has a QPushButton to pop a Slicer Window.
+        See: https://www.slicer.org/slicerWiki/images/c/c0/Slicer4_ProgrammingTutorial_Slicer4.5.pdf
         """
         self.parent.acknowledgementText = """
         Thanks to the tutorials.
