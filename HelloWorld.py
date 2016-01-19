@@ -1,4 +1,5 @@
 # Python scripy for Slicer extension
+# Most basic widget
 
 import vtk
 import qt
@@ -8,7 +9,8 @@ from slicer.ScriptedLoadableModule import *
 import logging
 
 #
-# Circular Region of Interest
+# Class in every Slicer script.
+# Note the parent class
 #
 
 
@@ -35,6 +37,7 @@ class CircularROI(ScriptedLoadableModule):
 
 #
 # CircularROIWidget
+# Note the parent class
 #
 
 
@@ -69,5 +72,5 @@ class CircularROIWidget(ScriptedLoadableModuleWidget):
         qt.QMessageBox.information(
             slicer.util.mainWindow(),
             'Slicer Python',
-            'Hello Slicer!!'
+            'Hello Slicer!!'  # Change here to test "Reload" button
             )
