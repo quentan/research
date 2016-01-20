@@ -14,7 +14,8 @@ import logging
 #
 
 
-class CircularROI(ScriptedLoadableModule):
+# The name MUST be same as the file name!
+class HelloWorld(ScriptedLoadableModule):
 
     """
     Inherited from `ScriptedLoadableModule` makes the widget require "Reload" function.
@@ -41,7 +42,7 @@ class CircularROI(ScriptedLoadableModule):
 #
 
 
-class CircularROIWidget(ScriptedLoadableModuleWidget):
+class HelloWorldWidget(ScriptedLoadableModuleWidget):
 
     def setup(self):
         ScriptedLoadableModuleWidget.setup(self)
