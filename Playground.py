@@ -45,11 +45,17 @@ class PlaygroundWidget(ScriptedLoadableModuleWidget):
         pgFormLayout.addWidget(testBtn)
         testBtn.connect('clicked()', self.onTestBtnClicked)
 
+        # Gradient Button
+        gradientBtn = qt.QPushButton("Gradient")
+        pgFormLayout.addWidget(gradientBtn)
+        gradientBtn.connect('clicked()', self.onGradientBtnClicked)
+
         # Spacer if needed
         self.layout.addStretch(1)
 
         # Set local variables as instance attributes
         self.testBtn = testBtn
+        self.gradentBtn = gradientBtn
 
     def onTestBtnClicked(self):
         print("Test Button Pressed!\n")
@@ -63,7 +69,7 @@ class PlaygroundWidget(ScriptedLoadableModuleWidget):
         imageData = volumeNode.GetImageData()
         extent = imageData.GetExtent()
 
-        image_np = slicer.util.array('MRHead')
+        # image_np = slicer.util.array('MRHead')
 
         for k in xrange(extent[4], extent[5]/2+1):
             for j in xrange(extent[2], extent[3]/2+1):
@@ -79,9 +85,10 @@ class PlaygroundWidget(ScriptedLoadableModuleWidget):
                     # print "i=%f, j=%f, k=%f, Value[i, j, k]=%f" % (i, j, k, image_np[k, j, i])
 
                     functionValue = (r-10)*(r-10) + (a+15)*(a+15) + s*s
+                    # functionValue = (i-10)**2 + (j+15)**2 + s**2
                     # functionValue = math.sqrt((r-10)**2 + (a+15)**2 + s**2)
                     # functionValue = r-10 + a+15 + s
-                    functionValue += image_np[k, j, i]
+                    # functionValue += image_np[k, j, i]
                     imageData.SetScalarComponentFromDouble(
                         i, j, k, 0, functionValue)
 
@@ -90,3 +97,26 @@ class PlaygroundWidget(ScriptedLoadableModuleWidget):
         #                                       distortionVerctorPosition_Ijk[2],
         #                                       0, fillValue)
         imageData.Modified()
+
+    def onGradientBtnClicked(self):
+
+        volumeNode = slicer.util.getNode('MRHead')
+        ijkToRas = vtk.vtkMatrix4x4()
+        volumeNode.GetIJKToRASMatrix(ijkToRas)
+        imageData = volumeNode.GetImageData()
+        extent = imageData.GetExtent()
+
+        # npData = slicer.util.array('MRHead')
+        impVol = vtk.vtkImplicitVolume()
+        impVol.SetVolume(imageData)
+
+        for k in xrange(extent[4], extent[5]/2+1):
+            for j in xrange(extent[2], extent[3]/2+1):
+                for i in xrange(extent[0], extent[1]/2+1):
+                    g = impVol.FunctionGradient(i, j, k)
+                    gradient = math.sqrt(g[0]**2 + g[1]**2 + g[2]**2)
+                    imageData.SetScalarComponentFromFloat(
+                        i, j, k, 0, gradient)
+
+        imageData.Modified()
+
