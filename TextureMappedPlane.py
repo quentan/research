@@ -2,6 +2,8 @@
 # Texture Mapped Plane to the scene as a model
 # http://wiki.slicer.org/slicerWiki/index.php/Documentation/4.5/ScriptRepository
 
+# 21/01/2016. Failed!
+
 import vtk
 import qt
 import ctk
@@ -76,6 +78,12 @@ class TextureMappedPlaneWidget(ScriptedLoadableModuleWidget):
         self.textureBtn = textureBtn
 
     def onTextureBtnClicked(self):
+
+        markups = slicer.util.getNode('F')
+        markups.AddObserver('ModifiedEvent', self.TextureMappedPlane)
+
+    def TextureMappedPlane(self, obj, event):
+
         # use dummy image data here
         e = vtk.vtkImageEllipsoidSource()
 
@@ -114,7 +122,6 @@ class TextureMappedPlaneWidget(ScriptedLoadableModuleWidget):
         vTransform.RotateX(30)
         # transform.SetAndObserveMatrixTransformToParent(vTransform.GetMatrix())
         transform.SetMatrixTransformToParent(vTransform.GetMatrix())
-
     def onHelloWorldBtnClicked(self):
         print("Hello World!")
 

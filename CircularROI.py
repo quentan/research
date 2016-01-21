@@ -109,7 +109,7 @@ class CircularROIWidget(ScriptedLoadableModuleWidget):
         # Create model node
         model = slicer.vtkMRMLModelNode()
         model.SetAndObservePolyData(self.sphere.GetOutput())
-        self.modelDisplay.SetColor(1, 1, 0)  # yellow
+        # self.modelDisplay.SetColor(1, 1, 0)  # yellows
         # self.modelDisplay.SetBackfaceCulling(0)
 
         # Create display node
