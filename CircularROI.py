@@ -53,20 +53,26 @@ class CircularROIWidget(ScriptedLoadableModuleWidget):
         # Layout
         sampleFormLayout = qt.QFormLayout(sampleCollasibleBtn)
 
-        # Button
+        # Hello World Button
         helloWorldBtn = qt.QPushButton("Hello World!")
         helloWorldBtn.toolTip = 'Print "Hello World" in standard output'
         # sampleFormLayout.addWidget(helloWorldBtn)
         # helloWorldBtn.connect('clicked()', self.onHelloWorldBtnClicked)
 
+        # CircularROI button
         circularROIBtn = qt.QPushButton("CircularROI")
         circularROIBtn.toolTip = "Get a circular Region of Interst"
         sampleFormLayout.addWidget(circularROIBtn)
         circularROIBtn.connect('clicked()', self.onCircularROIBtn)
 
+        # Show/Hide Sphere check box
         showCheckBox = qt.QCheckBox('Show/Hide Sphere')
         sampleFormLayout.addWidget(showCheckBox)
         showCheckBox.connect('clicked()', self.onShowCheckBox)
+
+        # TEST
+        showComboBo = ctk.ctkComboBox(sampleCollasibleBtn)
+        sampleFormLayout.addWidget(showComboBo)
 
         # Vertical spacer
         self.layout.addStretch(1)
@@ -98,22 +104,28 @@ class CircularROIWidget(ScriptedLoadableModuleWidget):
 
         self.UpdateSphere(0, 0)
 
+        scene = slicer.mrmlScene
+
+        # Create model node
         model = slicer.vtkMRMLModelNode()
         model.SetAndObservePolyData(self.sphere.GetOutput())
-        modelDisplay = slicer.vtkMRMLModelDisplayNode()
+        self.modelDisplay.SetColor(1, 1, 0)  # yellow
+        # self.modelDisplay.SetBackfaceCulling(0)
 
-        modelDisplay.SetSliceIntersectionVisibility(True)
-        modelDisplay.SetVisibility(True)
+        # Create display node
+        self.modelDisplay = slicer.vtkMRMLModelDisplayNode()
+        self.modelDisplay.SetSliceIntersectionVisibility(True)
+        self.modelDisplay.SetVisibility(True)
+        scene.AddNode(self.modelDisplay)
+        model.SetAndObserveDisplayNodeID(self.modelDisplay.GetID())
 
-        slicer.mrmlScene.AddNode(modelDisplay)
-        model.SetAndObserveDisplayNodeID(modelDisplay.GetID())
-        modelDisplay.SetInputPolyDataConnection(model.GetPolyDataConnection())
-
-        slicer.mrmlScene.AddNode(model)
+        # Add to scene
+        self.modelDisplay.SetInputPolyDataConnection(model.GetPolyDataConnection())
+        scene.AddNode(model)
 
         self.markups.AddObserver('ModifiedEvent', self.UpdateSphere, 2)
 
-        self.modelDisplay = modelDisplay
+        # self.modelDisplay = modelDisplay
 
     # Update the sphere from the fiducial points
     def UpdateSphere(self, p1, p2):

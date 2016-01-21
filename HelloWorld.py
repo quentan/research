@@ -37,7 +37,7 @@ class HelloWorld(ScriptedLoadableModule):
         """
 
 #
-# CircularROIWidget
+# HellowWorldWidget
 # Note the parent class
 #
 
