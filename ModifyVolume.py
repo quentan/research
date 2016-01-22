@@ -1,4 +1,4 @@
-# A Playground for test Slicer module
+# A ModifyVolume for test Slicer module
 
 import vtk
 import qt
@@ -9,12 +9,12 @@ import logging
 
 import math
 
-class Playground(ScriptedLoadableModule):
+class ModifyVolume(ScriptedLoadableModule):
 
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
 
-        self.parent.title = 'Playground'
+        self.parent.title = 'ModifyVolume'
         self.parent.categories = ['Examples']
         self.parent.dependencies = []
         self.parent.contributors = ["Quentan Qi (University of Hull)"]
@@ -26,14 +26,14 @@ class Playground(ScriptedLoadableModule):
         """
 
 
-class PlaygroundWidget(ScriptedLoadableModuleWidget):
+class ModifyVolumeWidget(ScriptedLoadableModuleWidget):
 
     def setup(self):
         ScriptedLoadableModuleWidget.setup(self)
 
         # Sample collasible Button
         pgCoBtn = ctk.ctkCollapsibleButton()
-        pgCoBtn.text = "Playground Collasible Button"
+        pgCoBtn.text = "ModifyVolume Collasible Button"
         self.layout.addWidget(pgCoBtn)
 
         # Layout
@@ -50,12 +50,18 @@ class PlaygroundWidget(ScriptedLoadableModuleWidget):
         pgFormLayout.addWidget(gradientBtn)
         gradientBtn.connect('clicked()', self.onGradientBtnClicked)
 
+        # Create New Volume
+        newVolBtn = qt.QPushButton("New Volume")
+        pgFormLayout.addWidget(newVolBtn)
+        newVolBtn.connect("clicked()", self.onNewVolBtnClicked)
+
         # Spacer if needed
         self.layout.addStretch(1)
 
         # Set local variables as instance attributes
         self.testBtn = testBtn
         self.gradentBtn = gradientBtn
+        self.newVolBtn = newVolBtn
 
     def onTestBtnClicked(self):
         print("Test Button Pressed!\n")
@@ -115,8 +121,49 @@ class PlaygroundWidget(ScriptedLoadableModuleWidget):
                 for i in xrange(extent[0], extent[1]/2+1):
                     g = impVol.FunctionGradient(i, j, k)
                     gradient = math.sqrt(g[0]**2 + g[1]**2 + g[2]**2)
-                    imageData.SetScalarComponentFromFloat(
-                        i, j, k, 0, gradient)
+                    imageData.SetScalarComponentFromFloat(i, j, k, 0, gradient)
 
         imageData.Modified()
 
+    def onNewVolBtnClicked(self):
+        imageSize = [128]*3
+        imageSpacing = [1.0]*3
+        voxelType = vtk.VTK_UNSIGNED_CHAR
+
+        # Create an empty image volume
+        imageData = vtk.vtkImageData()
+        imageData.SetDimensions(imageSize)
+        imageData.AllocateScalars(voxelType, 100)
+
+        thresholder = vtk.vtkImageThreshold()
+        thresholder.SetInputData(imageData)
+        thresholder.SetInValue(0)
+        thresholder.SetOutValue(0)
+
+        # Create volume node
+        volumeNode = slicer.vtkMRMLScalarVolumeNode()
+        volumeNode.SetSpacing(imageSpacing)
+        volumeNode.SetImageDataConnection(thresholder.GetOutputPort())
+
+        # Add volume to scene
+        scene = slicer.mrmlScene
+        scene.AddNode(volumeNode)
+        displayNode = slicer.vtkMRMLScalarVolumeDisplayNode()
+        scene.AddNode(displayNode)
+        colorNode = slicer.util.getNode('Grey')
+        displayNode.SetAndObserveColorNodeID(colorNode.GetID())
+        volumeNode.SetAndObserveDisplayNodeID(displayNode.GetID())
+        volumeNode.CreateDefaultStorageNode()
+
+        # Show the new volume in the Slice view
+        applicationLogic = slicer.app.applicationLogic()
+        selectionNode = applicationLogic.GetSelectionNode()
+        selectionNode.SetSecondaryVolumeID(volumeNode.GetID())
+        applicationLogic.PropagateForegroundVolumeSelection(0)
+
+        # Center the 3D View on the scene
+        # It works only after showing the 3D scene
+        layoutManager = slicer.app.layoutManager()
+        threeDWidget = layoutManager.threeDWidget(0)
+        threeDView = threeDWidget.threeDView()
+        threeDView.resetFocalPoint()
