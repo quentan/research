@@ -55,6 +55,17 @@ class ModifyVolumeWidget(ScriptedLoadableModuleWidget):
         pgFormLayout.addWidget(newVolBtn)
         newVolBtn.connect("clicked()", self.onNewVolBtnClicked)
 
+        # Gradient in new Volume
+        gradientInNewVolBtn = qt.QPushButton("Gradient in New Volume")
+        pgFormLayout.addWidget(gradientInNewVolBtn)
+        gradientInNewVolBtn.connect('clicked()', self.onGradientInNewVolBtnClicked)
+
+        # A Check box
+        testCheckBox = qt.QCheckBox("Test Check Box")
+        testCheckBox.toolTip = "Test how CheckBox works"
+        pgFormLayout.addWidget(testCheckBox)
+        testCheckBox.connect('toggled(bool)', self.onTestCheckBoxToggled)
+
         # Spacer if needed
         self.layout.addStretch(1)
 
@@ -133,7 +144,7 @@ class ModifyVolumeWidget(ScriptedLoadableModuleWidget):
         # Create an empty image volume
         imageData = vtk.vtkImageData()
         imageData.SetDimensions(imageSize)
-        imageData.AllocateScalars(voxelType, 100)
+        imageData.AllocateScalars(voxelType, 64)
 
         thresholder = vtk.vtkImageThreshold()
         thresholder.SetInputData(imageData)
@@ -167,3 +178,12 @@ class ModifyVolumeWidget(ScriptedLoadableModuleWidget):
         threeDWidget = layoutManager.threeDWidget(0)
         threeDView = threeDWidget.threeDView()
         threeDView.resetFocalPoint()
+
+    def onGradientInNewVolBtnClicked(self):
+        pass
+
+    def onTestCheckBoxToggled(self, state):
+        if state:
+            print "The CheckBox is toggled!"
+        else:
+            print "The CheckBox is untoggled!"
