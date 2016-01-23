@@ -180,7 +180,54 @@ class ModifyVolumeWidget(ScriptedLoadableModuleWidget):
         threeDView.resetFocalPoint()
 
     def onGradientInNewVolBtnClicked(self):
-        pass
+        # Result is not right!
+        volumeNode = slicer.util.getNode('MRHead')
+        ijkToRas = vtk.vtkMatrix4x4()
+        volumeNode.GetIJKToRASMatrix(ijkToRas)
+        imageData = volumeNode.GetImageData()
+        extent = imageData.GetExtent()
+
+        imageSize = imageData.GetDimensions()
+        imageSpacing = imageData.GetSpacing()
+        voxelType = vtk.VTK_FLOAT
+
+        # Create empty image volume
+        imageData_2 = vtk.vtkImageData()
+        imageData_2.SetDimensions(imageSize[0]/2, imageSize[1]/2, imageSize[2]/2)
+        imageData_2.SetSpacing(imageSpacing)
+        imageData_2.AllocateScalars(voxelType, 0)
+
+        thresholder = vtk.vtkImageThreshold()
+        thresholder.SetInputData(imageData_2)
+        thresholder.SetInValue(0)
+        thresholder.SetOutValue(0)
+
+        volumeNode_2 = slicer.vtkMRMLScalarVolumeNode()
+        volumeNode_2.SetSpacing(imageSpacing)
+        volumeNode_2.SetImageDataConnection(thresholder.GetOutputPort())
+
+        # Add volume to scene
+        scene = slicer.mrmlScene
+        scene.AddNode(volumeNode_2)
+        displayNode = slicer.vtkMRMLScalarVolumeDisplayNode()
+        scene.AddNode(displayNode)
+        colorNode = slicer.util.getNode('Grey')
+        displayNode.SetAndObserveColorNodeID(colorNode.GetID())
+        volumeNode_2.SetAndObserveDisplayNodeID(displayNode.GetID())
+        volumeNode_2.CreateDefaultStorageNode()
+
+        # npData = slicer.util.array('MRHead')
+        impVol = vtk.vtkImplicitVolume()
+        impVol.SetVolume(imageData)
+
+        for k in xrange(extent[4], extent[5]/2+1):
+            for j in xrange(extent[2], extent[3]/2+1):
+                for i in xrange(extent[0], extent[1]/2+1):
+                    g = impVol.FunctionGradient(i, j, k)
+                    gradient = math.sqrt(g[0]**2 + g[1]**2 + g[2]**2)
+                    imageData_2.SetScalarComponentFromFloat(i, j, k, 0, gradient)
+
+        imageData_2.Modified()
 
     def onTestCheckBoxToggled(self, state):
         if state:
