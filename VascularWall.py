@@ -49,19 +49,19 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         #
         # Input volume selector
         #
-        self.volumeSelector = slicer.qMRMLNOdeComboBox()
+        self.volumeSelector = slicer.qMRMLNodeComboBox()
         self.volumeSelector.nodeTypes = ("vtkMRMLScalarVolumeNode", "")
         self.volumeSelector.noneEnabled = False
         self.volumeSelector.selectNodeUponCreation = True
 
         self.volumeSelector.setMRMLScene(slicer.mrmlScene)
         self.volumeSelector.setToolTip("Select input volume")
-        parameterFormLayout.addRow("Input Volume: ", slef.volumeSelector)
+        parameterFormLayout.addRow("Input Volume: ", self.volumeSelector)
 
         #
         # Ruler selector
         #
-        self.rulerSelector = slicer.qMRMLNOdeComboBox()
+        self.rulerSelector = slicer.qMRMLNodeComboBox()
         self.rulerSelector.nodeTypes = ("vtkMRMLAnnotationRulerNode", "")
         self.rulerSelector.noneEnabled = False
         self.rulerSelector.selectNodeUponCreation = True
@@ -73,15 +73,17 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         #
         # Show/Hide sphere ChechBox
         self.showCheckBox = qt.QCheckBox("Show/Hide Sphere")
-        self.showCheckBox.toolTip("Show or hide the sphere")
+        self.showCheckBox.setToolTip("Show or hide the sphere")
 
         #
         # Apply Button
         #
         self.applyButton = qt.QPushButton("Apply")
         self.applyButton.toolTip = "Generate a sphere according to the sphere"
+        self.applyButton.enabled = True
+
         # parameterFormLayout.addWidget(self.applyButton)
-        # parameterFormLayout.addRow("A test label", self.applyButton)
+        # parameterFormLayout.addRow("A test label:", self.applyButton)
         parameterFormLayout.addRow(self.showCheckBox, self.applyButton)
 
         #
@@ -98,6 +100,19 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         #
         self.showCheckBox.connect('toggled(bool)', self.onShowCheckBoxToggled)
         self.applyButton.connect('clicked()', self.onApplyButtonClicked)
+        self.volumeSelector.connect('currentNodeChanged(vtkMRMLNode*)', self.onSelect)
+
+        # Add vertical spacer
+        self.layout.addStretch(1)
+
+        # Refresh applyButton state
+        self.onSelect()
+
+    def cleanup(self):
+        pass
+
+    def onSelect(self):
+        self.applyButton.enabled = self.volumeSelector.currentNode()
 
     def onShowCheckBoxToggled(self):
         logging.info("Toggled status of showCheckBox - %s" %
@@ -160,4 +175,4 @@ class VascularWallTest(ScriptedLoadableModuleTest):
 
         # Do testing code here
 
-        self.delayDisplay("Testing finished.o")
+        self.delayDisplay("Testing finished.")
