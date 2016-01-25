@@ -130,25 +130,68 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         logging.info("Toggled status of showCheckBox - %s" %
                      self.showCheckBox.isChecked())
 
+        if self.showCheckBox.isChecked():
+            self.modelDisplay.SetVisibility(True)
+
+        else:
+            self.modelDisplay.SetVisibility(False)
+
     def onApplyButtonClicked(self):
         """
         Real algorithm should be in class VascularWallLogic.
         """
         logging.info("applyButton is clicked.")
 
-        # For first click
-        self.UpdateSphereParameter(0, 0)
+        # Initialise VascularWallLogic object
+        # self.logic = VascularWallLogic(self.rulerSelector.currentNode())
 
-        # For modifying the ruler
-        self.rulerSelector.currentNode().AddObserver('ModifiedEvent', self.UpdateSphereParameter)
+        self.UpdateSphereParameter(0, 0)
+        self.rulerSelector.currentNode().AddObserver(
+            'ModifiedEvent', self.UpdateSphereParameter)
+
+        # Create models for sphere
+
+        self.sphere = vtk.vtkSphereSource()
+        # Model node
+        model = slicer.vtkMRMLModelNode()
+        model.SetAndObservePolyData(self.sphere.GetOutput())
+
+        # Display node
+        self.modelDisplay = slicer.vtkMRMLModelDisplayNode()
+        self.modelDisplay.SetSliceIntersectionVisibility(True)
+        self.modelDisplay.SetVisibility(True)
+        self.modelDisplay.SetOpacity(0.1)
+        slicer.mrmlScene.AddNode(self.modelDisplay)
+        model.SetAndObserveDisplayNodeID(self.modelDisplay.GetID())
+
+        # Add to scene
+        self.modelDisplay.SetInputPolyDataConnection(
+            model.GetPolyDataConnection())
+        slicer.mrmlScene.AddNode(model)
+
+        self.rulerSelector.currentNode().AddObserver(
+            'ModifiedEvent', self.UpdateSphere)
 
     def UpdateSphereParameter(self, obj, event):
         logic = VascularWallLogic(self.rulerSelector.currentNode())
-
         centralPoint = logic.getCentralPoint()
         radius = logic.getRadius()
+
         self.currentCenterCoord.setText([round(n, 2) for n in centralPoint])
         self.currentRadiusLength.setText(round(radius, 2))
+
+        # self.logic = logic
+
+    def UpdateSphere(self, obj, event):
+        logic = VascularWallLogic(self.rulerSelector.currentNode())
+        centerPoint = logic.getCentralPoint()
+        radius = logic.getRadius()
+
+        self.sphere.SetCenter(centerPoint)
+        self.sphere.SetRadius(radius)
+        self.sphere.SetPhiResolution(30)
+        self.sphere.SetThetaResolution(30)
+        self.sphere.Update()
 
 
 #
@@ -157,26 +200,27 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
 class VascularWallLogic(ScriptedLoadableModuleLogic):
 
     def __init__(self, rulerNode):
-
         self.info = {}  # Info of the rulerNode
 
-        startPoint = [0.0] * 3  # central point
-        endPoint = [0.0] * 3
-        radius = 0.0
+        if rulerNode:
+            startPoint = [0.0] * 3  # central point
+            endPoint = [0.0] * 3
+            radius = 0.0
 
-        rulerNode.GetPosition1(startPoint)
-        rulerNode.GetPosition2(endPoint)
-        radius = rulerNode.GetDistanceMeasurement()
+            rulerNode.GetPosition1(startPoint)
+            rulerNode.GetPosition2(endPoint)
+            radius = rulerNode.GetDistanceMeasurement()
 
-        self.info['startPoint'] = startPoint
-        self.info['endPoint'] = endPoint
-        self.info['radius'] = radius
+            self.info['startPoint'] = startPoint
+            self.info['endPoint'] = endPoint
+            self.info['radius'] = radius
 
-        self.rulerNode = rulerNode
+            self.rulerNode = rulerNode
 
     def hasSphereParameter(self, rulerNode):
         if not rulerNode:
-            logging.debug("hasSphereParameter failed: no central point and radius in ruler node!")
+            logging.debug(
+                "hasSphereParameter failed: no central point and radius in ruler node!")
             return False
 
         return True
@@ -211,13 +255,20 @@ class VascularWallLogic(ScriptedLoadableModuleLogic):
         if self.hasSphereParameter(self.rulerNode):
             return self.info['radius']
 
-    def getSphere(self, rulerNode):
-        pass
+    def getSphere(self):
+        sphere = vtk.vtkSphereSource()
+        centerPoint = self.getCentralPoint()
+        radius = self.getRadius()
 
+        sphere.SetCenter(centerPoint)
+        sphere.SetRadius(radius)
+        return sphere
 
 #
 # Test Case
 #
+
+
 class VascularWallTest(ScriptedLoadableModuleTest):
 
     def setUp(self):
