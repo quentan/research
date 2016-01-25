@@ -6,6 +6,7 @@ import ctk
 import slicer
 from slicer.ScriptedLoadableModule import *
 import logging
+logging.basicConfig(level=logging.INFO)
 
 import numpy as np
 
@@ -135,14 +136,18 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         """
         logging.info("applyButton is clicked.")
 
-        logic = VascularWallLogic()
+        # For first click
+        self.UpdateSphereParameter(0, 0)
 
-        startPoint = [0.0] * 3  # Central point
-        self.rulerSelector.currentNode().GetPosition1(startPoint)
-        radius = self.rulerSelector.currentNode().GetDistanceMeasurement()
+        # For modifying the ruler
+        self.rulerSelector.currentNode().AddObserver('ModifiedEvent', self.UpdateSphereParameter)
 
-        # self.currentCenterCoord.setText(startPoint)
-        self.currentCenterCoord.setText([round(n, 2) for n in startPoint])
+    def UpdateSphereParameter(self, obj, event):
+        logic = VascularWallLogic(self.rulerSelector.currentNode())
+
+        centralPoint = logic.getCentralPoint()
+        radius = logic.getRadius()
+        self.currentCenterCoord.setText([round(n, 2) for n in centralPoint])
         self.currentRadiusLength.setText(round(radius, 2))
 
 
@@ -150,6 +155,31 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
 # Logic
 #
 class VascularWallLogic(ScriptedLoadableModuleLogic):
+
+    def __init__(self, rulerNode):
+
+        self.info = {}  # Info of the rulerNode
+
+        startPoint = [0.0] * 3  # central point
+        endPoint = [0.0] * 3
+        radius = 0.0
+
+        rulerNode.GetPosition1(startPoint)
+        rulerNode.GetPosition2(endPoint)
+        radius = rulerNode.GetDistanceMeasurement()
+
+        self.info['startPoint'] = startPoint
+        self.info['endPoint'] = endPoint
+        self.info['radius'] = radius
+
+        self.rulerNode = rulerNode
+
+    def hasSphereParameter(self, rulerNode):
+        if not rulerNode:
+            logging.debug("hasSphereParameter failed: no central point and radius in ruler node!")
+            return False
+
+        return True
 
     def hasImageData(self, volumeNode):
         if not volumeNode:
@@ -173,27 +203,16 @@ class VascularWallLogic(ScriptedLoadableModuleLogic):
     def run(self, volumeNode, rulerNode):
         logging.info("VascularWallLogic.run() is called!")
 
-    def getCurrentParameters(self, rulerNode):
+    def getCentralPoint(self):
+        if self.hasSphereParameter(self.rulerNode):
+            return self.info['startPoint']
 
-        info = {}
-        # Get ruler endpoints coordinates in RAS
-        p0ras = rulerNode.GetPolyData().GetPoint(0)
-        p1ras = rulerNode.GetPolyData().GetPoint(1)
-        # import math
-        # radius = math.sqrt((p1[0]-p0[0])**2 +
-        #                    (p1[1]-p0[1])**2 +
-        #                    (p1[2]-p0[2])**2)
+    def getRadius(self):
+        if self.hasSphereParameter(self.rulerNode):
+            return self.info['radius']
 
-        p0 = np.array(p0ras)
-        p1 = np.array(p1ras)
-        t = p1 - p0
-        length = np.sqrt(t.dot(t))
-
-        info['startPoint'] = p0
-        info['endPoint'] = p1
-        info['length'] = length
-
-        return info
+    def getSphere(self, rulerNode):
+        pass
 
 
 #
