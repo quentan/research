@@ -160,7 +160,8 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         self.modelDisplay = slicer.vtkMRMLModelDisplayNode()
         self.modelDisplay.SetSliceIntersectionVisibility(True)
         self.modelDisplay.SetVisibility(True)
-        self.modelDisplay.SetOpacity(0.1)
+        self.modelDisplay.SetOpacity(0.5)
+        self.modelDisplay.SetRepresentation(1)
         slicer.mrmlScene.AddNode(self.modelDisplay)
         model.SetAndObserveDisplayNodeID(self.modelDisplay.GetID())
 
