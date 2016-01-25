@@ -136,10 +136,14 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         logging.info("applyButton is clicked.")
 
         logic = VascularWallLogic()
-        info = logic.getCurrentParameters(self.rulerSelector.currentNode())
-        # c = info['startPoint']
-        self.currentCenterCoord.setText(info['startPoint'])
-        self.currentRadiusLabel.setText(info['length'])
+
+        startPoint = [0.0] * 3  # Central point
+        self.rulerSelector.currentNode().GetPosition1(startPoint)
+        radius = self.rulerSelector.currentNode().GetDistanceMeasurement()
+
+        # self.currentCenterCoord.setText(startPoint)
+        self.currentCenterCoord.setText([round(n, 2) for n in startPoint])
+        self.currentRadiusLength.setText(round(radius, 2))
 
 
 #
