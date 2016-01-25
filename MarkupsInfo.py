@@ -1,3 +1,5 @@
+# This is a very good example to learn Python script in Slicer!
+
 from __main__ import qt, slicer
 import math
 
@@ -15,7 +17,7 @@ class MarkupsInfo:
         parent.categories = ["Examples"]
         parent.contributors = ["Andras Lasso (PerkLab)"]
         parent.helpText = string.Template("""
-Use this module to get information about markups. The only metric it computes now is the total distance between the markup points in the selected list.
+        Use this module to get information about markups. The only metric it computes now is the total distance between the markup points in the selected list.
     """).substitute({ 'a': parent.slicerWikiUrl, 'b': slicer.app.majorVersion, 'c': slicer.app.minorVersion })
         parent.acknowledgementText = """
     Supported by SparKit and the Slicer Community. See http://www.slicerrt.org for details.
@@ -43,10 +45,12 @@ class MarkupsInfoWidget:
         # Markup selector
         self.markupSelectorLabel = qt.QLabel()
         self.markupSelectorLabel.setText("Markup list: ")
+
         self.markupSelector = slicer.qMRMLNodeComboBox()
         self.markupSelector.nodeTypes = ("vtkMRMLMarkupsFiducialNode", "")
         self.markupSelector.noneEnabled = False
         self.markupSelector.selectNodeUponCreation = True
+
         self.markupSelector.setMRMLScene(slicer.mrmlScene)
         self.markupSelector.setToolTip("Pick the markup list to be filled")
         layout.addRow(self.markupSelectorLabel, self.markupSelector)
@@ -107,7 +111,8 @@ class MarkupsInfoLogic:
         for fidIndex in xrange(markupNode.GetNumberOfFiducials()-1):
             markupNode.GetNthFiducialPosition(fidIndex, startPtCoords)
             markupNode.GetNthFiducialPosition(fidIndex+1, endPtCoords)
-            dist = math.sqrt((startPtCoords[0]-endPtCoords[0])**2+(
-                startPtCoords[1]-endPtCoords[1])**2+(startPtCoords[2]-endPtCoords[2])**2)
+            dist = math.sqrt((startPtCoords[0]-endPtCoords[0])**2 +
+                             (startPtCoords[1]-endPtCoords[1])**2 +
+                             (startPtCoords[2]-endPtCoords[2])**2)
             totalDist = totalDist+dist
         self.info['totalDistance'] = totalDist
