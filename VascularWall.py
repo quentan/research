@@ -142,13 +142,6 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         """
         logging.info("applyButton is clicked.")
 
-        # Initialise VascularWallLogic object
-        # self.logic = VascularWallLogic(self.rulerSelector.currentNode())
-
-        self.UpdateSphereParameter(0, 0)
-        self.rulerSelector.currentNode().AddObserver(
-            'ModifiedEvent', self.UpdateSphereParameter)
-
         # Create models for sphere
 
         self.sphere = vtk.vtkSphereSource()
@@ -159,7 +152,7 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         # Display node
         self.modelDisplay = slicer.vtkMRMLModelDisplayNode()
         self.modelDisplay.SetSliceIntersectionVisibility(True)
-        self.modelDisplay.SetVisibility(True)
+        self.modelDisplay.SetVisibility(self.showCheckBox.isChecked())
         self.modelDisplay.SetOpacity(0.5)
         self.modelDisplay.SetRepresentation(1)
         slicer.mrmlScene.AddNode(self.modelDisplay)
@@ -170,10 +163,11 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
             model.GetPolyDataConnection())
         slicer.mrmlScene.AddNode(model)
 
-        self.rulerSelector.currentNode().AddObserver(
-            'ModifiedEvent', self.UpdateSphere)
+        # Callback
+        self.UpdateSphere(0, 0)
+        self.rulerSelector.currentNode().AddObserver('ModifiedEvent', self.UpdateSphere)
 
-    def UpdateSphereParameter(self, obj, event):
+    def UpdateSphere(self, obj, event):
         logic = VascularWallLogic(self.rulerSelector.currentNode())
         centralPoint = logic.getCentralPoint()
         radius = logic.getRadius()
@@ -181,14 +175,7 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         self.currentCenterCoord.setText([round(n, 2) for n in centralPoint])
         self.currentRadiusLength.setText(round(radius, 2))
 
-        # self.logic = logic
-
-    def UpdateSphere(self, obj, event):
-        logic = VascularWallLogic(self.rulerSelector.currentNode())
-        centerPoint = logic.getCentralPoint()
-        radius = logic.getRadius()
-
-        self.sphere.SetCenter(centerPoint)
+        self.sphere.SetCenter(centralPoint)
         self.sphere.SetRadius(radius)
         self.sphere.SetPhiResolution(30)
         self.sphere.SetThetaResolution(30)
