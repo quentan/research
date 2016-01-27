@@ -165,7 +165,8 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
 
         # Callback
         self.UpdateSphere(0, 0)
-        self.rulerSelector.currentNode().AddObserver('ModifiedEvent', self.UpdateSphere)
+        self.rulerSelector.currentNode().AddObserver(
+            'ModifiedEvent', self.UpdateSphere)
 
     def UpdateSphere(self, obj, event):
         logic = VascularWallLogic(self.rulerSelector.currentNode())
@@ -252,11 +253,34 @@ class VascularWallLogic(ScriptedLoadableModuleLogic):
         sphere.SetRadius(radius)
         return sphere
 
+    def getImplicitSphere(self):
+        impSphere = vtk.vtkSphere()  # implicit sphere
+        centerPoint = self.getCentralPoint()
+        radius = self.getRadius()
+
+        impSphere.SetRadius(radius)
+        impSphere.SetCenter(centerPoint)
+        return impSphere
+
+    def extract(self, volumeNode):
+        if not self.isValidInputData(volumeNode):
+            logging.error("No input volume!")
+            return
+
+        imageData = volumeNode.GetImageData()
+        impSphere = self.getImplicitSphere()
+
+        extract = vtk.vtkExtractGeometry()
+        extract.SetInputData(imageData)
+        extract.SetImplicitFunction(impSphere)
+
+        dataMapper = vtk.vtkDataSetMapper()
+        dataMapper.SetInputConnection(extract.GetOutputPort())
+
+
 #
 # Test Case
 #
-
-
 class VascularWallTest(ScriptedLoadableModuleTest):
 
     def setUp(self):
