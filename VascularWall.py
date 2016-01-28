@@ -142,12 +142,29 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         """
         logging.info("applyButton is clicked.")
 
-        # Create models for sphere
-
         self.sphere = vtk.vtkSphereSource()
+
+        # Callback
+        self.UpdateSphere(0, 0)
+        self.rulerSelector.currentNode().AddObserver(
+            'ModifiedEvent', self.UpdateSphere)
+
+        # ---Test---
+        # logic = VascularWallLogic(self.rulerSelector.currentNode())
+        # centralPoint = logic.getCentralPoint()
+        # radius = logic.getRadius()
+
+        # impSphere = vtk.vtkSphere()
+        # impSphere.SetCenter(centralPoint)
+        # impSphere.SetRadius(radius)
+
+        # extract = logic.extract(self.volumeSelector.currentNode(), impSphere)
+        # ===TEST===
+
         # Model node
         model = slicer.vtkMRMLModelNode()
         model.SetAndObservePolyData(self.sphere.GetOutput())
+        # model.SetAndObservePolyData(extract.GetOutput())
 
         # Display node
         self.modelDisplay = slicer.vtkMRMLModelDisplayNode()
@@ -163,15 +180,10 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
             model.GetPolyDataConnection())
         slicer.mrmlScene.AddNode(model)
 
-        # Callback
-        self.UpdateSphere(0, 0)
-        self.rulerSelector.currentNode().AddObserver(
-            'ModifiedEvent', self.UpdateSphere)
-
     def UpdateSphere(self, obj, event):
-        logic = VascularWallLogic(self.rulerSelector.currentNode())
-        centralPoint = logic.getCentralPoint()
-        radius = logic.getRadius()
+        self.logic = VascularWallLogic(self.rulerSelector.currentNode())
+        centralPoint = self.logic.getCentralPoint()
+        radius = self.logic.getRadius()
 
         self.currentCenterCoord.setText([round(n, 2) for n in centralPoint])
         self.currentRadiusLength.setText(round(radius, 2))
@@ -244,7 +256,7 @@ class VascularWallLogic(ScriptedLoadableModuleLogic):
         if self.hasSphereParameter(self.rulerNode):
             return self.info['radius']
 
-    def getSphere(self):
+    def getSphere(self):  # never used!
         sphere = vtk.vtkSphereSource()
         centerPoint = self.getCentralPoint()
         radius = self.getRadius()
@@ -262,20 +274,28 @@ class VascularWallLogic(ScriptedLoadableModuleLogic):
         impSphere.SetCenter(centerPoint)
         return impSphere
 
-    def extract(self, volumeNode):
+    def extract(self, volumeNode, implicitFunction):
+        """
+        Extract the inside of volumeNode using the implicitFunction
+        """
         if not self.isValidInputData(volumeNode):
             logging.error("No input volume!")
             return
 
         imageData = volumeNode.GetImageData()
-        impSphere = self.getImplicitSphere()
+        # impSphere = self.getImplicitSphere()
 
         extract = vtk.vtkExtractGeometry()
         extract.SetInputData(imageData)
-        extract.SetImplicitFunction(impSphere)
+        extract.SetImplicitFunction(implicitFunction)
 
-        dataMapper = vtk.vtkDataSetMapper()
-        dataMapper.SetInputConnection(extract.GetOutputPort())
+        # dataMapper = vtk.vtkDataSetMapper()
+        # dataMapper.SetInputConnection(extract.GetOutputPort())
+
+        parison = vtk.vtkGeometryFilter()
+        parison.SetInputConnection(extract.GetOutputPort())
+
+        return parison
 
 
 #
