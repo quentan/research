@@ -181,7 +181,7 @@ class LineIntersityProfileLogic(ScriptedLoadableModuleLogic):
         node has valid image data
         """
         if not volumeNode:
-            logging.debug('hasImageData futoailed: no volume node')
+            logging.debug('hasImageData failed: no volume node')
             return False
         if volumeNode.GetImageData() is None:
             logging.debug('hasImageData failed: no image data in volume node')

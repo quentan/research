@@ -85,8 +85,37 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         dim = self.imageData.GetDimensions()  # it is reversed from its ndarray
         # self.shapeValue.setText(dim)
+        # TODO: Get info of the vtkImageData when needed
 
         ndarray = slicer.util.array(self.volumeSelector1.currentNode().GetID())
         # print('Correspondent ndarray:\n' + str(ndarray))
         shape = ndarray.shape
         self.shapeValue.setText(shape)
+
+        # TODO: move the code to Logic part.
+
+
+#
+# Logic
+#
+class DivideImageLogic(ScriptedLoadableModuleLogic):
+
+    def hasImageData(self, volumeNode):
+
+        if not volumeNode:
+            logging.debug('hasImageData failed: no volume node')
+            return False
+        if volumeNode.GetImageData() is None:
+            logging.debug('hasImageData failed: no image data in volume node')
+            return False
+        return True
+
+    def getImageData(self, volumeNode):
+
+        if hasImageData(volumeNode):
+            return volumeNode.GetImageData()
+
+    def getNdarray(self, volumeNode):
+
+        if hasImageData(volumeNode):
+            return slicer.util.array(volumeNode.GetID())
