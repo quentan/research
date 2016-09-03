@@ -1,4 +1,7 @@
 # Python scripy for Slicer extension
+"""
+Using 2 fiducial points to make a sphere and show it in the scene
+"""
 
 import vtk
 import qt
@@ -53,15 +56,9 @@ class CircularROIWidget(ScriptedLoadableModuleWidget):
         # Layout
         sampleFormLayout = qt.QFormLayout(sampleCollasibleBtn)
 
-        # Hello World Button
-        helloWorldBtn = qt.QPushButton("Hello World!")
-        helloWorldBtn.toolTip = 'Print "Hello World" in standard output'
-        # sampleFormLayout.addWidget(helloWorldBtn)
-        # helloWorldBtn.connect('clicked()', self.onHelloWorldBtnClicked)
-
         # CircularROI button
         circularROIBtn = qt.QPushButton("CircularROI")
-        circularROIBtn.toolTip = "Get a circular Region of Interst"
+        circularROIBtn.toolTip = "Get a circular Region of Interst using 2 fiducial points"
         sampleFormLayout.addWidget(circularROIBtn)
         circularROIBtn.connect('clicked()', self.onCircularROIBtn)
 
@@ -72,13 +69,14 @@ class CircularROIWidget(ScriptedLoadableModuleWidget):
 
         # TEST
         showComboBo = ctk.ctkComboBox(sampleCollasibleBtn)
+        showComboBo.toolTip = "A test button, no function implemented yet"
         sampleFormLayout.addWidget(showComboBo)
+        # sampleFormLayout.addRow("A test Combo",showComboBo)
 
         # Vertical spacer
         self.layout.addStretch(1)
 
         # Set local var as instance attribute
-        self.helloWorldBtn = helloWorldBtn
         self.circularROIBtn = circularROIBtn
         self.showCheckBox = showCheckBox
 
@@ -99,6 +97,7 @@ class CircularROIWidget(ScriptedLoadableModuleWidget):
         )
 
     def onCircularROIBtn(self):
+        print("CircularROIBtn is pressed.")
         self.markups = slicer.util.getNode('F')
         self.sphere = vtk.vtkSphereSource()
 

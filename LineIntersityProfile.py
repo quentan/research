@@ -14,7 +14,8 @@ import logging
 
 class LineIntersityProfile(ScriptedLoadableModule):
 
-    """Uses ScriptedLoadableModule base class, available at:
+    """
+    Uses ScriptedLoadableModule base class, available at:
     https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
     """
 
@@ -42,7 +43,8 @@ class LineIntersityProfile(ScriptedLoadableModule):
 
 class LineIntersityProfileWidget(ScriptedLoadableModuleWidget):
 
-    """Uses ScriptedLoadableModuleWidget base class, available at:
+    """
+    Uses ScriptedLoadableModuleWidget base class, available at:
     https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
     """
 
@@ -280,13 +282,14 @@ class LineIntersityProfileLogic(ScriptedLoadableModuleLogic):
     def probeVolume(self, volumeNode, rulerNode):
 
         # get ruler ednpoints coordinates in RAS
+        # make the coordinate from (x,y,z) to (x,y,z,1) by adding (1,)
         p0ras = rulerNode.GetPolyData().GetPoint(0) + (1,)
         p1ras = rulerNode.GetPolyData().GetPoint(1) + (1,)
 
-        # RAS --> IJK
+        # RAS --> IJK (vtkImageData)
         ras2ijk = vtk.vtkMatrix4x4()
         volumeNode.GetRASToIJKMatrix(ras2ijk)
-        p0ijk = [int(round(c)) for c in ras2ijk.MultiplyPoint(p0ras)[:3]]
+        p0ijk = [int(round(c)) for c in ras2ijk.MultiplyPoint(p0ras)[:3]]  # Not understand
         p1ijk = [int(round(c)) for c in ras2ijk.MultiplyPoint(p1ras)[:3]]
 
         # Create VTK line that will be used for sampling
@@ -296,13 +299,23 @@ class LineIntersityProfileLogic(ScriptedLoadableModuleLogic):
         line.SetPoint2(p1ijk)
 
         # Create VTK probe filter and sample the image
+        """
+        vtkProbeFilter is a filter that computes point attributes (e.g., scalars, vectors, etc.) at specified point positions.
+        The filter has two inputs: the Input and Source. The Input geometric structure is passed through the filter. The point attributes are computed at the Input point positions by interpolating into the source data. For example, we can compute data values on a plane (plane specified as Input) from a volume (Source). The cell data of the source data is copied to the output based on in which source cell each input point is. If an array of the same name exists both in source's point and cell data, only the one from the point data is probed.
+        """
         probe = vtk.vtkProbeFilter()
         probe .SetInputConnection(line.GetOutputPort())
         probe.SetSourceData(volumeNode.GetImageData())
         probe.Update()
 
         # Return VTK array
-        return probe.GetOutput().GetPointData().GetArray('ImageScalars')
+        """
+        probe: vtkProbeFilter
+        probe.GetOutput(): vtkDataSet
+        probe.GetOutput().GetPointData(): vtkPointData
+        probe.GetOutput().GetPointData().GetArray(): vtkDataArray
+        """
+        return probe.GetOutput().GetPointData().GetArray('ImageScalars')  # returns a vtkDataArray
 
     def showChart(self, samples, names):
         print('Logic showing chart\n')
@@ -364,7 +377,8 @@ class LineIntersityProfileTest(ScriptedLoadableModuleTest):
         self.test_LineIntersityProfile1()
 
     def test_LineIntersityProfile1(self):
-        """ Ideally you should have several levels of tests.  At the lowest level
+        """
+        Ideally you should have several levels of tests.  At the lowest level
         tests should exercise the functionality of the logic with different inputs
         (both valid and invalid).  At higher levels your tests should emulate the
         way the user would interact with your code and confirm that it still works

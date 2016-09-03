@@ -5,7 +5,7 @@ import vtk
 import qt
 import ctk
 import slicer
-from slicer.ScriptedLoadableModule import *
+from slicer.ScriptedLoadableModule import *  # for "Reload" button
 import logging
 
 #
@@ -73,5 +73,5 @@ class HelloWorldWidget(ScriptedLoadableModuleWidget):
         qt.QMessageBox.information(
             slicer.util.mainWindow(),
             'Slicer Python',
-            'Hello Slicer!!'  # Change here to test "Reload" button
+            'Hello Slicer!!\nNote: This is different from the title of the button'  # Change here to test "Reload" button
             )

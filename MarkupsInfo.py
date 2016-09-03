@@ -1,4 +1,7 @@
 # This is a very good example to learn Python script in Slicer!
+"""
+Calculate the length between 2 fiducial points
+"""
 
 from __main__ import qt, slicer
 import math

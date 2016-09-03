@@ -9,7 +9,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 import numpy as np
-
+from vtk.util.vtkImageExportToArray import VTK_DOUBLE
 
 #
 # VascularWall
@@ -145,20 +145,21 @@ class VascularWallWidget(ScriptedLoadableModuleWidget):
         self.sphere = vtk.vtkSphereSource()
 
         # Callback
+        # self.logic gets updated in it
         self.UpdateSphere(0, 0)
         self.rulerSelector.currentNode().AddObserver(
             'ModifiedEvent', self.UpdateSphere)
 
         # ---Test---
         # logic = VascularWallLogic(self.rulerSelector.currentNode())
-        # centralPoint = logic.getCentralPoint()
-        # radius = logic.getRadius()
+        centralPoint = self.logic.getCentralPoint()
+        radius = self.logic.getRadius()
 
-        # impSphere = vtk.vtkSphere()
-        # impSphere.SetCenter(centralPoint)
-        # impSphere.SetRadius(radius)
+        impSphere = vtk.vtkSphere()
+        impSphere.SetCenter(centralPoint)
+        impSphere.SetRadius(radius)
 
-        # extract = logic.extract(self.volumeSelector.currentNode(), impSphere)
+        extract = self.logic.getExtraction(self.volumeSelector.currentNode(), impSphere)
         # ===TEST===
 
         # Model node
@@ -274,7 +275,7 @@ class VascularWallLogic(ScriptedLoadableModuleLogic):
         impSphere.SetCenter(centerPoint)
         return impSphere
 
-    def extract(self, volumeNode, implicitFunction):
+    def getExtraction(self, volumeNode, implicitFunction):
         """
         Extract the inside of volumeNode using the implicitFunction
         """

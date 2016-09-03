@@ -1,4 +1,7 @@
 # A CloneVolume for test Slicer module
+"""
+Not finished!
+"""
 
 import vtk
 import qt
