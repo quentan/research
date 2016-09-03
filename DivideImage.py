@@ -45,9 +45,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         #
         # Fisrt input volume selector
         self.volumeSelector1 = slicer.qMRMLNodeComboBox()
-        self.volumeSelector1.nodeTypes = (("vtkMRMLScalarVolumeNode"), "")
-        self.volumeSelector1.addAttribute(
-            "vtkMRMLScalarVolumeNode", "LabelMap", 0)
+        self.volumeSelector1.nodeTypes = ("vtkMRMLScalarVolumeNode", "")
+        # self.volumeSelector1.addAttribute("vtkMRMLScalarVolumeNode", "LabelMap", 0)  # deprecated
         self.volumeSelector1.selectNodeUponCreation = True
         self.volumeSelector1.addEnabled = False
         self.volumeSelector1.removeEnabled = False
@@ -80,7 +79,14 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
     # Response functions
     def onVolumeSelect(self):
-        # self.applyBtn.enabled = self.volumeSelector1.currentNode()
-        shape = self.volumeSelector1.currentNode().GetImageData().GetDimensions()
+
+        self.imageData = self.volumeSelector1.currentNode().GetImageData()
+        # print('vtkImageData of the volume: ' + str(self.imageData))
+
+        dim = self.imageData.GetDimensions()  # it is reversed from its ndarray
+        # self.shapeValue.setText(dim)
+
+        ndarray = slicer.util.array(self.volumeSelector1.currentNode().GetID())
+        # print('Correspondent ndarray:\n' + str(ndarray))
+        shape = ndarray.shape
         self.shapeValue.setText(shape)
-        # TODO: Get the array from currentNode()
