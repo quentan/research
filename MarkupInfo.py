@@ -2,14 +2,19 @@
 This is example script from "MarkupsInfo.py"
 Some changes are done in this script.
 """
-import qt, slicer, ctk
+import qt
+import slicer
+import ctk
 import math
-from slicer.ScriptedLoadableModule import *
+from slicer.ScriptedLoadableModule import ScriptedLoadableModule
+from slicer.ScriptedLoadableModule import ScriptedLoadableModuleWidget
+from slicer.ScriptedLoadableModule import ScriptedLoadableModuleLogic
+from slicer.ScriptedLoadableModule import ScriptedLoadableModuleTest
+
 
 #
 # MarkupInfo module
 #
-
 class MarkupInfo(ScriptedLoadableModule):
 
     def __init__(self, parent):
@@ -25,6 +30,7 @@ class MarkupInfo(ScriptedLoadableModule):
         self.parent.acknowledgementText = """
         Thanks for XXX.
         """
+
 
 #
 # MarkupInfoWidget
@@ -80,7 +86,8 @@ class MarkupInfoWidget(ScriptedLoadableModuleWidget):
         # Connections
         #
         self.applyBtn.connect('clicked(bool)', self.onApplyBtn)
-        self.markupSelector.connect('currentNodeChanged(vtkMRMLNode*)', self.onMarkupSelect)
+        self.markupSelector.connect('currentNodeChanged(vtkMRMLNode*)',
+                                    self.onMarkupSelect)
 
     def onMarkupSelect(self):
         self.applyBtn.enabled = self.markupSelector.currentNode()
@@ -108,7 +115,7 @@ class MarkupInfoLogic(ScriptedLoadableModuleLogic):
 
         for idx in xrange(markupNode.GetNumberOfFiducials()-1):
             markupNode.GetNthFiducialPosition(idx, p0)
-            markupNode.GetNthFiducialPosition(idx+1,p1)
+            markupNode.GetNthFiducialPosition(idx+1, p1)
 
             length = math.sqrt((p0[0]-p1[0])**2 +
                                (p0[1]-p1[1])**2 +
@@ -193,5 +200,3 @@ class MarkupInfoTest(ScriptedLoadableModuleTest):
         moduleWidget.onApplyBtn()
 
         self.delayDisplay("If a distance is shown - test passed!")
-
-

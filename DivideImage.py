@@ -3,7 +3,10 @@ Load an image as a numpy array and divide it into small ones
 """
 import qt, slicer, ctk
 import math
+import numpy as np
 from slicer.ScriptedLoadableModule import *
+import logging
+logging.basicConfig(level=logging.WARNING)
 
 #
 # MarkupInfo module
@@ -80,19 +83,18 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
     # Response functions
     def onVolumeSelect(self):
 
-        self.imageData = self.volumeSelector1.currentNode().GetImageData()
-        # print('vtkImageData of the volume: ' + str(self.imageData))
+        logic = DivideImageLogic()
+        logging.info('Logic is running')
 
-        dim = self.imageData.GetDimensions()  # it is reversed from its ndarray
-        # self.shapeValue.setText(dim)
-        # TODO: Get info of the vtkImageData when needed
+        ndarray = logic.getNdarray(self.volumeSelector1.currentNode())
+        ndarryShape = ndarray.shape
+        logging.info('The shape of the ndarray: ' + str(ndarryShape))
+        self.shapeValue.setText(ndarryShape)
 
-        ndarray = slicer.util.array(self.volumeSelector1.currentNode().GetID())
-        # print('Correspondent ndarray:\n' + str(ndarray))
-        shape = ndarray.shape
-        self.shapeValue.setText(shape)
-
-        # TODO: move the code to Logic part.
+        # TEST
+        ndarray[50:60] = 0
+        imageData = logic.getImageData(self.volumeSelector1.currentNode())
+        imageData.Modified()
 
 
 #
@@ -112,10 +114,19 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
     def getImageData(self, volumeNode):
 
-        if hasImageData(volumeNode):
-            return volumeNode.GetImageData()
+        if self.hasImageData(volumeNode):
+            imageData = volumeNode.GetImageData()
+            logging.info('vtkImageData of the volume: ' + str(imageData))
+            return imageData
 
     def getNdarray(self, volumeNode):
 
-        if hasImageData(volumeNode):
-            return slicer.util.array(volumeNode.GetID())
+        if self.hasImageData(volumeNode):
+            ndarray = slicer.util.array(volumeNode.GetID())
+            logging.info('Correspondent ndarray:\n' + str(ndarray))
+            return ndarray
+
+    def getSubMatrix(self, bigMatrix, size=[10, 10, 10]):
+
+        subMatrix = np.zeros(size)
+
