@@ -179,7 +179,7 @@ class MarkupInfoTest(ScriptedLoadableModuleTest):
         fiducialNode = slicer.vtkMRMLMarkupsFiducialNode()
         slicer.mrmlScene.AddNode(fiducialNode)
         import random
-        num = 5
+        num = random.randint(5, 15)  # Get an integer 5<=N<=15
         print('\n%d random points are generated:' % num)
         for i in range(num):
             p = random.sample(range(-100, 100), 3)  # a random 3D point
