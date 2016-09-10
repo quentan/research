@@ -1,10 +1,13 @@
 import os
-import unittest
+# import unittest
 import vtk
 import qt
 import ctk
 import slicer
-from slicer.ScriptedLoadableModule import *
+from slicer.ScriptedLoadableModule import ScriptedLoadableModule
+from slicer.ScriptedLoadableModule import ScriptedLoadableModuleWidget
+from slicer.ScriptedLoadableModule import ScriptedLoadableModuleLogic
+from slicer.ScriptedLoadableModule import ScriptedLoadableModuleTest
 import logging
 
 #
@@ -208,7 +211,7 @@ class LineIntersityProfileLogic(ScriptedLoadableModuleLogic):
     def takeScreenshot(self, name, description, type=-1):
         # show the message even if not taking a screen shot
         slicer.util.delayDisplay(
-            'Take screenshot: '+description+'.\nResult is available in the Annotations module.', 3000)
+            'Take screenshot: ' + description + '.\nResult is available in the Annotations module.', 3000)
 
         lm = slicer.app.layoutManager()
         # switch on the type to get the requested window
@@ -273,8 +276,8 @@ class LineIntersityProfileLogic(ScriptedLoadableModuleLogic):
 
         # Running showChart() method
         imageSamples = [volumeSamples1, volumeSamples2]
-        legendNames = [volumeNode1.GetName()+' - '+rulerNode.GetName(),
-                       volumeNode2.GetName()+' - '+rulerNode.GetName()]
+        legendNames = [volumeNode1.GetName() + ' - ' + rulerNode.GetName(),
+                       volumeNode2.GetName() + ' - ' + rulerNode.GetName()]
         self.showChart(imageSamples, legendNames)
 
         return True
@@ -289,7 +292,8 @@ class LineIntersityProfileLogic(ScriptedLoadableModuleLogic):
         # RAS --> IJK (vtkImageData)
         ras2ijk = vtk.vtkMatrix4x4()
         volumeNode.GetRASToIJKMatrix(ras2ijk)
-        p0ijk = [int(round(c)) for c in ras2ijk.MultiplyPoint(p0ras)[:3]]  # Not understand
+        p0ijk = [int(round(c))
+                 for c in ras2ijk.MultiplyPoint(p0ras)[:3]]  # Not understand
         p1ijk = [int(round(c)) for c in ras2ijk.MultiplyPoint(p1ras)[:3]]
 
         # Create VTK line that will be used for sampling
@@ -344,7 +348,7 @@ class LineIntersityProfileLogic(ScriptedLoadableModuleLogic):
 
         # S3. Get the chart view MRML node
         cvNodes = slicer.mrmlScene.GetNodesByClass('vtkMRMLChartViewNode')
-        cvNodes.SetReferenceCount(cvNodes.GetReferenceCount()-1)
+        cvNodes.SetReferenceCount(cvNodes.GetReferenceCount() - 1)
         cvNodes.InitTraversal()
         cvNode = cvNodes.GetNextItemAsObject()
 
