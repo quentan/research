@@ -15,11 +15,12 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModuleTest
 import logging
 logging.getLogger('').handlers = []
 # logging.basicConfig(level=logging.DEBUG)
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.WARNING)
 
 
 #
-# MarkupInfo module
+# Module
 #
 class DivideImage(ScriptedLoadableModule):
 
@@ -77,16 +78,10 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.shapeValue = qt.QLabel()
         _layout.addRow(self.shapeLabel, self.shapeValue)
 
-        # Get Shape button
-        # self.getShapeBtn = qt.QPushButton("Get Shape")
-        # self.getShapeBtn.toolTip = "Get the shape of the loaded image"
-        # self.getShapeBtn.enabled = True
-        # _layout.addRow(self.getShapeBtn, self.shapeValue)
-
         # Test button
         self.testBtn = qt.QPushButton("TEST")
         self.testBtn.toolTip = "Do some test work"
-        self.testBtn.enabled = True
+        self.testBtn.enabled = False
         _layout.addRow(self.testBtn)
 
         # Vertical spacer
@@ -94,40 +89,33 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         #
         # Connection
-        # self.volumeSelector1.connect('currentNodeChanged(vtkMRMLNode*)',
-        #                              self.onVolumeSelect)
+        self.volumeSelector1.connect('nodeActivated(vtkMRMLNode*)',
+                                     self.onVolumeSelect)
         self.testBtn.connect('clicked(bool)', self.onTestBtn)
 
     # Response functions
 
     def onTestBtn(self):
         logic = DivideImageLogic()
-        logging.info("Logic is running")
+        logging.info("Logic is instantiated.")
 
         ndarray = logic.getNdarray(self.volumeSelector1.currentNode())
         ndarryShape = ndarray.shape
         logging.debug("The shape of the ndarray: " + str(ndarryShape))
         self.shapeValue.setText(ndarryShape)
 
-        # TEST
+        # TEST 1
         ndarray[20:30] = 0
         imageData = logic.getImageData(self.volumeSelector1.currentNode())
         imageData.Modified()
 
+        # TEST 2
+        logic.getSubMatrices(self.volumeSelector1.currentNode())
+
+        logic.showVolume(self.volumeSelector1.currentNode())
+
     def onVolumeSelect(self):
-
-        logic = DivideImageLogic()
-        logging.info("Logic is running")
-
-        ndarray = logic.getNdarray(self.volumeSelector1.currentNode())
-        ndarryShape = ndarray.shape
-        logging.debug("The shape of the ndarray: " + str(ndarryShape))
-        self.shapeValue.setText(ndarryShape)
-
-        # TEST
-        ndarray[50:60] = 0
-        imageData = logic.getImageData(self.volumeSelector1.currentNode())
-        imageData.Modified()
+        self.testBtn.enabled = self.volumeSelector1.currentNode()
 
 
 #
@@ -159,11 +147,15 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             logging.debug("Correspondent ndarray:\n" + str(ndarray))
             return ndarray
 
-    def getSubMatrix(self, volumeNode, step=[50] * 3):
+    def getSubMatrices(self, volumeNode, step=[40] * 3):
+        """
+        Divide the big matrix into small ones according with `step`
+        Return an array containing these sub matrices
+        """
 
         bigMatrix = self.getNdarray(volumeNode)
         shape = bigMatrix.shape
-        num = 0
+        subMatrices = []
 
         for i in range(0, shape[0], step[0]):
             for j in range(0, shape[1], step[1]):
@@ -172,11 +164,18 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           j:j + step[1],
                                           k:k + step[2]
                                           ]
-                    num = num + 1
+                    subMatrices.append(subMatrix)
 
-        logging.debug("No. %d: \n" % (num // 2) + str(subMatrix))
+        logging.info("%d subMatrix generated" % len(subMatrices))
 
-        logging.info("%d subMatrix printed" % num)
+        return subMatrices
+
+    def showVolume(self, volumeNode):
+        # This is not 3D scene showing.
+        applicationLogic = slicer.app.applicationLogic()
+        selectionNode = applicationLogic.GetSelectionNode()
+        selectionNode.SetSecondaryVolumeID(volumeNode.GetID())
+        applicationLogic.PropagateForegroundVolumeSelection(0)
 
 
 #
@@ -191,7 +190,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.setUp()
         # self.test1_DivideImage()
         # self.test2_DivideImage()
-        self.test3_DivideImage()
+        # self.test3_DivideImage()
+        self.test4_DivideImage()
 
     def test1_DivideImage(self):
         """
@@ -265,8 +265,26 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # logic = DivideImageLogic()
         # self.assertTrue(logic.hasImageData(volumeNode))
 
-        # logic.getSubMatrix(volumeNode)
+        # logic.getSubMatrix(volumeNode)  # Wrong! Do NOT access logic here
         moduleWidget = slicer.modules.DivideImageWidget
 
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
         moduleWidget.onTestBtn()
+
+    def test4_DivideImage(self):
+        """
+        Load an image from disk and do array conversion.
+        """
+        self.delayDisplay("Run Test No. 4")
+        logging.info("\nRun Test No. 4.\n")
+
+        filepath = "/Users/Quentan/Box Sync/IMAGE/spgr.nhdr"
+        slicer.util.loadVolume(filepath)
+        volumeNode = slicer.util.getNode(pattern="spgr")
+        self.delayDisplay("Image loaded from: " + filepath)
+
+        moduleWidget = slicer.modules.DivideImageWidget
+        moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
+        moduleWidget.onTestBtn()
+
+        logging.info("Test 4 finished.")
