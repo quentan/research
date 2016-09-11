@@ -105,12 +105,12 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.shapeValue.setText(ndarryShape)
 
         # TEST 1
-        ndarray[20:30] = 0
+        # ndarray[20:30] = 0
         imageData = logic.getImageData(self.volumeSelector1.currentNode())
         imageData.Modified()
 
         # TEST 2
-        logic.getSubMatrices(self.volumeSelector1.currentNode())
+        logic.getSubMatrices(self.volumeSelector1.currentNode(), step=[10] * 3)
 
         logic.showVolume(self.volumeSelector1.currentNode())
 
@@ -164,6 +164,12 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           j:j + step[1],
                                           k:k + step[2]
                                           ]
+                    # TEST
+                    # Make the hull of subMatrix to be 0
+                    subMatrix[0, :, :] = 0
+                    subMatrix[:, 0, :] = 0
+                    subMatrix[:, :, 0] = 0
+
                     subMatrices.append(subMatrix)
 
         logging.info("%d subMatrix generated" % len(subMatrices))
@@ -190,8 +196,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.setUp()
         # self.test1_DivideImage()
         # self.test2_DivideImage()
-        # self.test3_DivideImage()
-        self.test4_DivideImage()
+        self.test3_DivideImage()
+        # self.test4_DivideImage()
 
     def test1_DivideImage(self):
         """
@@ -245,8 +251,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # first, get some data
         import urllib
         downloads = (
-            ("http://slicer.kitware.com/midas3/download?items=5767",
-             "FA.nrrd", slicer.util.loadVolume),
+            ("http://slicer.kitware.com/midas3/download/item/1697",
+             "MR-head.nrrd", slicer.util.loadVolume),
         )
 
         for url, name, loader in downloads:
@@ -260,7 +266,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
                 loader(filePath)
         self.delayDisplay("Finished with download and loading")
 
-        volumeNode = slicer.util.getNode(pattern="FA")
+        volumeNode = slicer.util.getNode(pattern="MR-head")
         # logging.debug("FA: \n" + str(volumeNode))
         # logic = DivideImageLogic()
         # self.assertTrue(logic.hasImageData(volumeNode))
@@ -279,6 +285,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logging.info("\nRun Test No. 4.\n")
 
         filepath = "/Users/Quentan/Box Sync/IMAGE/spgr.nhdr"
+        # filepath = "/Users/Quentan/Develop/IMAGE/MIDAS/Normal-001/MRA/Normal001-MRA.mha"
         slicer.util.loadVolume(filepath)
         volumeNode = slicer.util.getNode(pattern="spgr")
         self.delayDisplay("Image loaded from: " + filepath)
