@@ -30,7 +30,7 @@ class DivideImage(ScriptedLoadableModule):
         self.parent.title = "Divide Image"
         self.parent.categories = ["Examples"]
         self.parent.dependencies = []
-        self.parent.contributors = "Quentan Qi (Univeristy of Hull)"
+        self.parent.contributors = ["Quan Qi (Univeristy of Hull)"]
         self.parent.helpText = """
         Load an image as a numpy array and divide it into small ones
         """
@@ -59,8 +59,6 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # Fisrt input volume selector
         self.volumeSelector1 = slicer.qMRMLNodeComboBox()
         self.volumeSelector1.nodeTypes = ("vtkMRMLScalarVolumeNode", "")
-        # self.volumeSelector1.addAttribute("vtkMRMLScalarVolumeNode",
-        # "LabelMap", 0)  # deprecated
         self.volumeSelector1.selectNodeUponCreation = True
         self.volumeSelector1.addEnabled = False
         self.volumeSelector1.removeEnabled = False
@@ -77,6 +75,20 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.shapeLabel.setText("Shape of the image: ")
         self.shapeValue = qt.QLabel()
         _layout.addRow(self.shapeLabel, self.shapeValue)
+
+        #
+        # Divide step
+        self.divideStepLabel = qt.QLabel()
+        self.divideStepLabel.setText("Divide step: ")
+        self.divideStepValue = qt.QLabel()
+        _layout.addRow(self.divideStepLabel, self.divideStepValue)
+
+        #
+        # Number label for sub matrices
+        self.numSubMatricesLabel = qt.QLabel()
+        self.numSubMatricesLabel.setText("Number of sub matrices: ")
+        self.numSubMatricesValue = qt.QLabel()
+        _layout.addRow(self.numSubMatricesLabel, self.numSubMatricesValue)
 
         # Test button
         self.testBtn = qt.QPushButton("TEST")
@@ -104,13 +116,14 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.debug("The shape of the ndarray: " + str(ndarryShape))
         self.shapeValue.setText(ndarryShape)
 
-        # TEST 1
-        # ndarray[20:30] = 0
+        divideStep = (10, 10, 10)
+        self.divideStepValue.setText(divideStep)
+        subMatrices = logic.getSubMatrices(self.volumeSelector1.currentNode(),
+                                           divideStep)
+        self.numSubMatricesValue.setText(len(subMatrices))
+
         imageData = logic.getImageData(self.volumeSelector1.currentNode())
         imageData.Modified()
-
-        # TEST 2
-        logic.getSubMatrices(self.volumeSelector1.currentNode(), step=[10] * 3)
 
         logic.showVolume(self.volumeSelector1.currentNode())
 
@@ -245,7 +258,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
     def test3_DivideImage(self):
 
-        self.delayDisplay("Run Test No. 3")
+        # self.delayDisplay("Run Test No. 3")
         logging.info("\nRun Test No. 3.\n")
 
         # first, get some data
@@ -256,7 +269,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         )
 
         for url, name, loader in downloads:
-            filePath = slicer.app.temporaryPath + '/' + name
+            # filePath = slicer.app.temporaryPath + '/' + name
+            filePath = os.path.join(slicer.app.temporaryPath, name)
             if not os.path.exists(filePath) or os.stat(filePath).st_size == 0:
                 logging.info(
                     "Requesting download %s from %s...\n" % (name, url))
@@ -267,15 +281,16 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.delayDisplay("Finished with download and loading")
 
         volumeNode = slicer.util.getNode(pattern="MR-head")
-        # logging.debug("FA: \n" + str(volumeNode))
-        # logic = DivideImageLogic()
-        # self.assertTrue(logic.hasImageData(volumeNode))
+        logic = DivideImageLogic()
+        self.assertTrue(logic.hasImageData(volumeNode))
 
         # logic.getSubMatrix(volumeNode)  # Wrong! Do NOT access logic here
         moduleWidget = slicer.modules.DivideImageWidget
 
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
         moduleWidget.onTestBtn()
+
+        logging.info("Test 3 finished.")
 
     def test4_DivideImage(self):
         """
@@ -284,10 +299,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.delayDisplay("Run Test No. 4")
         logging.info("\nRun Test No. 4.\n")
 
-        filepath = "/Users/Quentan/Box Sync/IMAGE/spgr.nhdr"
-        # filepath = "/Users/Quentan/Develop/IMAGE/MIDAS/Normal-001/MRA/Normal001-MRA.mha"
+        filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
         slicer.util.loadVolume(filepath)
-        volumeNode = slicer.util.getNode(pattern="spgr")
+        volumeNode = slicer.util.getNode(pattern="MR-head")
         self.delayDisplay("Image loaded from: " + filepath)
 
         moduleWidget = slicer.modules.DivideImageWidget
