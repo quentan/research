@@ -111,11 +111,11 @@ class MarkupsInfoLogic:
         totalDist = 0
         startPtCoords = [0.0, 0.0, 0.0]
         endPtCoords = [0.0, 0.0, 0.0]
-        for fidIndex in xrange(markupNode.GetNumberOfFiducials()-1):
+        for fidIndex in xrange(markupNode.GetNumberOfFiducials() - 1):
             markupNode.GetNthFiducialPosition(fidIndex, startPtCoords)
-            markupNode.GetNthFiducialPosition(fidIndex+1, endPtCoords)
-            dist = math.sqrt((startPtCoords[0]-endPtCoords[0])**2 +
-                             (startPtCoords[1]-endPtCoords[1])**2 +
-                             (startPtCoords[2]-endPtCoords[2])**2)
-            totalDist = totalDist+dist
+            markupNode.GetNthFiducialPosition(fidIndex + 1, endPtCoords)
+            dist = math.sqrt((startPtCoords[0] - endPtCoords[0])**2 +
+                             (startPtCoords[1] - endPtCoords[1])**2 +
+                             (startPtCoords[2] - endPtCoords[2])**2)
+            totalDist = totalDist + dist
         self.info['totalDistance'] = totalDist

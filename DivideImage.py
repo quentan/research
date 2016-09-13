@@ -111,21 +111,22 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logic = DivideImageLogic()
         logging.info("Logic is instantiated.")
 
-        ndarray = logic.getNdarray(self.volumeSelector1.currentNode())
+        volumeNode = self.volumeSelector1.currentNode()
+        ndarray = logic.getNdarray(volumeNode)
         ndarryShape = ndarray.shape
         logging.debug("The shape of the ndarray: " + str(ndarryShape))
         self.shapeValue.setText(ndarryShape)
 
         divideStep = (10, 10, 10)
         self.divideStepValue.setText(divideStep)
-        subMatrices = logic.getSubMatrices(self.volumeSelector1.currentNode(),
-                                           divideStep)
+        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
         self.numSubMatricesValue.setText(len(subMatrices))
 
-        imageData = logic.getImageData(self.volumeSelector1.currentNode())
+        imageData = logic.getImageData(volumeNode)
         imageData.Modified()
 
-        logic.showVolume(self.volumeSelector1.currentNode())
+        # logic.showVolume(self.volumeSelector1.currentNode())
+        logic.getImageInfo(imageData)
 
     def onVolumeSelect(self):
         self.testBtn.enabled = self.volumeSelector1.currentNode()
@@ -152,6 +153,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             imageData = volumeNode.GetImageData()
             logging.debug("vtkImageData of the volume: " + str(imageData))
             return imageData
+        else:
+            logging.error("Error: Failed to get ImageData!")
+            return False
 
     def getNdarray(self, volumeNode):
 
@@ -159,6 +163,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             ndarray = slicer.util.array(volumeNode.GetID())
             logging.debug("Correspondent ndarray:\n" + str(ndarray))
             return ndarray
+        else:
+            logging.error("Error: Failed to get ndarray!")
+            return False
 
     def getSubMatrices(self, volumeNode, step=[40] * 3):
         """
@@ -169,6 +176,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         bigMatrix = self.getNdarray(volumeNode)
         shape = bigMatrix.shape
         subMatrices = []
+        num = 0
 
         for i in range(0, shape[0], step[0]):
             for j in range(0, shape[1], step[1]):
@@ -177,17 +185,75 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           j:j + step[1],
                                           k:k + step[2]
                                           ]
+                    num = num + 1
                     # TEST
                     # Make the hull of subMatrix to be 0
                     subMatrix[0, :, :] = 0
                     subMatrix[:, 0, :] = 0
                     subMatrix[:, :, 0] = 0
 
+                    # TEST
+                    # Decide this matrix is valid or not
+                    isValid = self.isValidMatrix(subMatrix)
+                    logging.debug("Sub matrix No." + str(num) + " is " + str(isValid))
+
                     subMatrices.append(subMatrix)
 
         logging.info("%d subMatrix generated" % len(subMatrices))
 
         return subMatrices
+
+    def isValidMatrix(self, subMatrix, range=[90, 100]):
+        """
+        Return `True` this matrix contains at least 10% points
+        in the range
+        """
+        length = len(subMatrix)
+        num = 0
+
+        for index, item in enumerate(subMatrix.flatten()):
+            # print index, item
+            if item >= range[0] and item <= range[1]:
+                num = num + 1
+
+        logging.debug("Number of valid point: " + str(num))  # SLOW!!
+
+        if num / length >= 0.1:
+            return True
+        else:
+            return False
+
+    def getImageInfo(self, imageData):
+        """
+        Record information of vtkImageData into a dict.
+        All these info can be acquired by `imageData.GetXXX()`
+        """
+        imageInfo = {}
+        origin = imageData.GetOrigin()
+        spacing = imageData.GetSpacing()
+        extent = imageData.GetExtent()
+        centre = imageData.GetCenter()
+        dimensions = imageData.GetDimensions()
+        number = imageData.GetNumberOfPoints()
+        valueMax = imageData.GetScalarTypeMax()
+        valueMin = imageData.GetScalarTypeMin()
+        length = imageData.GetLength()  # what is it?
+        dataType = imageData.GetScalarTypeAsString()
+
+        imageInfo = {'origin': origin,
+                     'spacing': spacing,
+                     'extent': extent,
+                     'centre': centre,
+                     'dimensions': dimensions,
+                     'number': number,
+                     'valueMax': valueMax,
+                     'valueMin': valueMin,
+                     'length': length,
+                     'dataType': dataType
+                     }
+
+        logging.info("imageInfo: \n" + str(imageInfo))
+        return imageInfo
 
     def showVolume(self, volumeNode):
         # This is not 3D scene showing.
@@ -209,8 +275,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.setUp()
         # self.test1_DivideImage()
         # self.test2_DivideImage()
-        self.test3_DivideImage()
-        # self.test4_DivideImage()
+        # self.test3_DivideImage()
+        self.test4_DivideImage()
 
     def test1_DivideImage(self):
         """
