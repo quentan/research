@@ -117,10 +117,13 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.debug("The shape of the ndarray: " + str(ndarryShape))
         self.shapeValue.setText(ndarryShape)
 
+        # Get subMatrices with given step
         divideStep = (10, 10, 10)
         self.divideStepValue.setText(divideStep)
         subMatrices = logic.getSubMatrices(volumeNode, divideStep)
         self.numSubMatricesValue.setText(len(subMatrices))
+
+
 
         imageData = logic.getImageData(volumeNode)
         imageData.Modified()
@@ -176,7 +179,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         bigMatrix = self.getNdarray(volumeNode)
         shape = bigMatrix.shape
         subMatrices = []
-        num = 0
+        # num = 0
 
         for i in range(0, shape[0], step[0]):
             for j in range(0, shape[1], step[1]):
@@ -185,24 +188,39 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           j:j + step[1],
                                           k:k + step[2]
                                           ]
-                    num = num + 1
-                    # TEST
-                    # Make the hull of subMatrix to be 0
-                    subMatrix[0, :, :] = 0
-                    subMatrix[:, 0, :] = 0
-                    subMatrix[:, :, 0] = 0
-
-                    # TEST
-                    # Decide this matrix is valid or not
-                    isValid = self.isValidMatrix(subMatrix)
-                    logging.debug("Sub matrix No." + str(num) + " is " + str(isValid))
+                    # num = num + 1
+                    # # TEST
+                    # # Make the hull of subMatrix to be 0
+                    # subMatrix[0, :, :] = 0
+                    # subMatrix[:, 0, :] = 0
+                    # subMatrix[:, :, 0] = 0
+                    #
+                    # # TEST
+                    # # Decide this matrix is valid or not
+                    # isValid = self.isValidMatrix(subMatrix)
+                    # logging.debug("Sub matrix No." + str(num) + " is " + str(isValid))
 
                     subMatrices.append(subMatrix)
 
-        logging.info("%d subMatrix generated" % len(subMatrices))
+        logging.info("%d subMatrices generated" % len(subMatrices))
 
         return subMatrices
 
+    # TEST function
+    def cropSubMatrix(self, subMatrix, value=0):
+        """
+        Make the hull of the given subMatrix to be `value`
+        """
+        if len(subMatrix.shape) == 3:
+            subMatrix[0, :, :] = value
+            subMatrix[:, 0, :] = value
+            subMatrix[:, :, 0] = value
+            return True
+        else:
+            logging.debug("Dimension of the give subMatix is not 3!")
+            return False
+
+    # Deprecated
     def isValidMatrix(self, subMatrix, range=[90, 100]):
         """
         Return `True` this matrix contains at least 10% points
@@ -211,16 +229,38 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         length = len(subMatrix)
         num = 0
 
-        for index, item in enumerate(subMatrix.flatten()):
-            # print index, item
+        # for index, item in enumerate(subMatrix.flatten()):
+        #     if item >= range[0] and item <= range[1]:
+        #         num = num + 1
+
+        for index, item in np.ndenumerate(subMatrix):
             if item >= range[0] and item <= range[1]:
                 num = num + 1
 
-        logging.debug("Number of valid point: " + str(num))  # SLOW!!
+        logging.info("Number of valid point: " + str(num))  # SLOW!!
 
         if num / length >= 0.1:
             return True
         else:
+            return False
+
+        # TODO: use ndenumerate to do the stuff. Done!
+
+    def getCoords(self, subMatrix, range=[90, 100]):
+        """
+        Return coords of valid point from a subMatrix
+        Return `False` if the subMatix is invalid
+        """
+        coords = []
+        for coord, value in np.ndenumerate(subMatrix):
+            if value >= range[0] and value <= range[1]:
+                coords.append(coord)
+
+        if len(coords) / len(subMatrix) >= 0.1:
+            logging.debug("Valid subMatrix")
+            return coords
+        else:
+            logging.info("Invalid subMatrix")
             return False
 
     def getImageInfo(self, imageData):
