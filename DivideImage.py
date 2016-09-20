@@ -123,13 +123,32 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         subMatrices = logic.getSubMatrices(volumeNode, divideStep)
         self.numSubMatricesValue.setText(len(subMatrices))
 
+        # TEST chop subMatrices
+        for subMatrix in subMatrices:
+            logic.chopSubMatrix(subMatrix)
 
+        # TEST getCoords
+        length = len(subMatrices)
+        randomNum = np.random.randint(length * 0.3, length * 0.7)
+        logging.info("This is subMatrix No." + str(randomNum))
+        coords = logic.getCoords(subMatrices[randomNum])
+        if coords:
+            logging.info("There are " + str(len(coords)) + " valid points in subMatrix " + str(randomNum))
+            num = 1
+            logging.info("Coords of valide point in subMatrix " + str(randomNum) + ":")
+            self.delayDisplay("Coords of valide point in subMatrix " + str(randomNum) + ":")
+            for coord in coords:
+                logging.info("No. " + str(num) + ": " + str(coord))
+                num = num + 1
+        else:
+            logging.info("subMatix " + str(randomNum) + " is invalid")
 
+        # Update the image
         imageData = logic.getImageData(volumeNode)
         imageData.Modified()
 
         # logic.showVolume(self.volumeSelector1.currentNode())
-        logic.getImageInfo(imageData)
+        # logic.getImageInfo(imageData)
 
     def onVolumeSelect(self):
         self.testBtn.enabled = self.volumeSelector1.currentNode()
@@ -188,18 +207,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           j:j + step[1],
                                           k:k + step[2]
                                           ]
-                    # num = num + 1
-                    # # TEST
-                    # # Make the hull of subMatrix to be 0
-                    # subMatrix[0, :, :] = 0
-                    # subMatrix[:, 0, :] = 0
-                    # subMatrix[:, :, 0] = 0
-                    #
-                    # # TEST
-                    # # Decide this matrix is valid or not
-                    # isValid = self.isValidMatrix(subMatrix)
-                    # logging.debug("Sub matrix No." + str(num) + " is " + str(isValid))
-
                     subMatrices.append(subMatrix)
 
         logging.info("%d subMatrices generated" % len(subMatrices))
@@ -207,7 +214,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         return subMatrices
 
     # TEST function
-    def cropSubMatrix(self, subMatrix, value=0):
+    def chopSubMatrix(self, subMatrix, value=0):
         """
         Make the hull of the given subMatrix to be `value`
         """
@@ -403,7 +410,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         Load an image from disk and do array conversion.
         """
         self.delayDisplay("Run Test No. 4")
-        logging.info("\nRun Test No. 4.\n")
+        logging.info("\n\nRun Test No. 4.\n")
 
         filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
         slicer.util.loadVolume(filepath)
