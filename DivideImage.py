@@ -72,16 +72,30 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         #
         # Shape label of the image
         self.shapeLabel = qt.QLabel()
-        self.shapeLabel.setText("Shape of the image: ")
+        self.shapeLabel.setText("&Shape of the image: ")
         self.shapeValue = qt.QLabel()
         _layout.addRow(self.shapeLabel, self.shapeValue)
 
         #
         # Divide step
         self.divideStepLabel = qt.QLabel()
-        self.divideStepLabel.setText("Divide step: ")
+        self.divideStepLabel.setText("Divide s&tep: ")
         self.divideStepValue = qt.QLabel()
         _layout.addRow(self.divideStepLabel, self.divideStepValue)
+
+        #
+        # Edit Box
+        self.divideStepText = qt.QTextEdit()
+        self.divideStepText.setText("Divide step")
+        # _layout.addRow(self.divideStepLabel, self.divideStepText)
+        # TODO: input step instead of the default value
+
+        #
+        # TEST: several spin box
+        self.stepXSpin = qt.QSpinBox()
+        self.stepXSpin.setMinimum(10)
+        self.stepXSpin.setMaximum(100)
+        _layout.addWidget(self.stepXSpin)
 
         #
         # Number label for sub matrices
@@ -136,7 +150,6 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
             logging.info("There are " + str(len(coords)) + " valid points in subMatrix " + str(randomNum))
             num = 1
             logging.info("Coords of valide point in subMatrix " + str(randomNum) + ":")
-            self.delayDisplay("Coords of valide point in subMatrix " + str(randomNum) + ":")
             for coord in coords:
                 logging.info("No. " + str(num) + ": " + str(coord))
                 num = num + 1
@@ -419,6 +432,6 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
-        moduleWidget.onTestBtn()
+        # moduleWidget.onTestBtn()
 
         logging.info("Test 4 finished.")
