@@ -72,16 +72,23 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         #
         # Shape label of the image
         self.shapeLabel = qt.QLabel()
-        self.shapeLabel.setText("&Shape of the image: ")
+        self.shapeLabel.setText("Shape of the image: ")
         self.shapeValue = qt.QLabel()
         _layout.addRow(self.shapeLabel, self.shapeValue)
 
         #
+        # ctkCoordinatesWidget
+        self.stepInputWidget = ctk.ctkCoordinatesWidget()
+        self.stepInputWidget.decimals = 0
+        
+
+        #
         # Divide step
         self.divideStepLabel = qt.QLabel()
-        self.divideStepLabel.setText("Divide s&tep: ")
+        self.divideStepLabel.setText("Divide step (X, Y, Z): ")
         self.divideStepValue = qt.QLabel()
-        _layout.addRow(self.divideStepLabel, self.divideStepValue)
+        # _layout.addRow(self.divideStepLabel, self.divideStepValue)
+        _layout.addRow(self.divideStepLabel, self.stepInputWidget)
 
         #
         # Edit Box
@@ -91,11 +98,11 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # TODO: input step instead of the default value
 
         #
-        # TEST: several spin box
-        self.stepXSpin = qt.QSpinBox()
-        self.stepXSpin.setMinimum(10)
-        self.stepXSpin.setMaximum(100)
-        _layout.addWidget(self.stepXSpin)
+        # TEST: spin box
+        # self.stepXSpin = qt.QSpinBox()
+        # self.stepXSpin.setMinimum(10)
+        # self.stepXSpin.setMaximum(100)
+        # _layout.addWidget(self.stepXSpin)
 
         #
         # Number label for sub matrices
