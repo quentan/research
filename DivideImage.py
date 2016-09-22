@@ -114,8 +114,10 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         #
         # Connection
-        self.volumeSelector1.connect('nodeActivated(vtkMRMLNode*)',
-                                     self.onVolumeSelect)
+        # self.volumeSelector1.connect('nodeActivated(vtkMRMLNode*)',
+        #                              self.onVolumeSelect)
+        self.volumeSelector1.connect('currentNodeChanged(bool)',
+                                     self.onVolumeSelectChanged)
         self.cleanSceneBtn.connect('clicked(bool)', self.onCleanSceneBtn)
         self.testBtn.connect('clicked(bool)', self.onTestBtn)
         self.divideStepWidget.connect('coordinatesChanged(double *)',
@@ -128,9 +130,18 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.testBtn.enabled = self.volumeSelector1.currentNode()
         self.cleanSceneBtn.enabled = self.volumeSelector1.currentNode()
 
+    def onVolumeSelectChanged(self):
+        if self.volumeSelector1.currentNode()is None:
+            self.testBtn.enabled = False
+            self.cleanSceneBtn.enabled = False
+        else:
+            self.testBtn.enabled = True
+            self.cleanSceneBtn.enabled = True
+
     def onDivideStepWidgetChanged(self):
         pass
         # TODO: make this function fully work
+        # This function may be innecessary
 
     def getDivideStep(self):
         unicodeStep = self.divideStepWidget.coordinates  # unicode list
@@ -141,9 +152,15 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
             logging.info("Divide Step is invalid")
             return False
 
-    def setDivideStep(self, step=10):
-        self.divideStepWidget.minimum = step
-        # TODO: how to set different x, y, z steps?
+    def setDivideStep(self, step=[10] * 3):
+        if len(step) is not 3:
+            logging.debug("Step should be given as [intX, intY, intZ]")
+            return False
+
+        unicodeStep = [unicode(i) for i in step]  # coordinates need unicode
+        self.divideStepWidget.coordinates = unicodeStep
+
+        return True
 
     def onCleanSceneBtn(self):
         slicer.mrmlScene.Clear(0)
@@ -151,9 +168,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.testBtn.enabled = False
         self.shapeValue.setText('')
         self.numSubMatricesValue.setText('')
-        self.divideStepWidget.minimum = 10
-
-
+        self.divideStepWidget.coordinates = '10, 10, 10'
 
     def onTestBtn(self):
 
@@ -187,11 +202,11 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         coords = logic.getCoords(subMatrices[randomNum])
         if coords:
             logging.info("There are " + str(len(coords)) + " valid points in subMatrix " + str(randomNum))
-            num = 1
-            logging.info("Coords of valide point in subMatrix " + str(randomNum) + ":")
-            for coord in coords:
-                logging.info("No. " + str(num) + ": " + str(coord))
-                num = num + 1
+            # num = 1
+            # logging.info("Coords of valide point in subMatrix " + str(randomNum) + ":")
+            # for coord in coords:
+            #     logging.info("No. " + str(num) + ": " + str(coord))  # SLOW
+            #     num = num + 1
         else:
             logging.info("subMatix " + str(randomNum) + " is invalid")
 
