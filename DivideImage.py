@@ -57,6 +57,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         #
         # Fisrt input volume selector
+        self.volumeLabel = qt.QLabel()
+        self.volumeLabel.setText("Volume:")
         self.volumeSelector1 = slicer.qMRMLNodeComboBox()
         self.volumeSelector1.nodeTypes = ("vtkMRMLScalarVolumeNode", "")
         self.volumeSelector1.selectNodeUponCreation = True
@@ -67,82 +69,50 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.volumeSelector1.showChildNodeTypes = False
         self.volumeSelector1.setMRMLScene(slicer.mrmlScene)
         self.volumeSelector1.setToolTip("Pick up the volume.")
-        _layout.addRow("Volume: ", self.volumeSelector1)
-
-        #
-        # Shape label of the image
-        self.shapeLabel = qt.QLabel()
-        self.shapeLabel.setText("Shape of the image: ")
-        self.shapeValue = qt.QLabel()
-        _layout.addRow(self.shapeLabel, self.shapeValue)
-
-        #
-        # ctkCoordinatesWidget
-        self.divideStepWidget = ctk.ctkCoordinatesWidget()
-        self.divideStepWidget.decimals = 0
-        self.divideStepWidget.minimum = 10  # pixel
-        self.divideStepWidget.maximum = 100  # pixel
+        _layout.addRow(self.volumeLabel, self.volumeSelector1)
 
         #
         # Divide step
         self.divideStepLabel = qt.QLabel()
         self.divideStepLabel.setText("Divide step (X, Y, Z): ")
-        self.divideStepValue = qt.QLabel()
-        # _layout.addRow(self.divideStepLabel, self.divideStepValue)
+        self.divideStepWidget = ctk.ctkCoordinatesWidget()
+        self.divideStepWidget.decimals = 0
+        self.divideStepWidget.minimum = 10  # pixel
+        self.divideStepWidget.maximum = 100  # pixel
         _layout.addRow(self.divideStepLabel, self.divideStepWidget)
 
-        #
-        # Number label for sub matrices
-        self.numSubMatricesLabel = qt.QLabel()
-        self.numSubMatricesLabel.setText("Number of sub matrices: ")
-        self.numSubMatricesValue = qt.QLabel()
-        _layout.addRow(self.numSubMatricesLabel, self.numSubMatricesValue)
+        # Test button No. 1
+        self.testBtn = qt.QPushButton("TEST 1")
+        self.testBtn.toolTip = "Autometic test work"
+        self.testBtn.enabled = self.volumeSelector1.currentNode()
+
+        # Test button No. 2
+        self.testBtn2 = qt.QPushButton("TEST 2")
+        self.testBtn2.toolTip = "Divide Image and Get 1 valid subMatix"
+        self.testBtn2.enabled = self.volumeSelector1.currentNode()
 
         # Clean Scene button
         self.cleanSceneBtn = qt.QPushButton("Clean Scene")
         self.cleanSceneBtn.toolTip = "Clean the current mrmlScene"
         self.cleanSceneBtn.enabled = self.volumeSelector1.currentNode()
 
-        # Test button
-        self.testBtn = qt.QPushButton("TEST")
-        self.testBtn.toolTip = "Do some test work"
-        self.testBtn.enabled = self.volumeSelector1.currentNode()
-        _layout.addRow(self.cleanSceneBtn, self.testBtn)
+        # TEST layout, 3 columns
+        testLayout = qt.QFormLayout()
+        testLayout.addRow(self.testBtn, self.testBtn2)
+        _layout.addRow(self.cleanSceneBtn, testLayout)
 
         # Vertical spacer
         self.layout.addStretch(1)
 
-        #
         # Connection
-        # self.volumeSelector1.connect('nodeActivated(vtkMRMLNode*)',
-        #                              self.onVolumeSelect)
         self.volumeSelector1.connect('currentNodeChanged(bool)',
                                      self.onVolumeSelectChanged)
         self.cleanSceneBtn.connect('clicked(bool)', self.onCleanSceneBtn)
         self.testBtn.connect('clicked(bool)', self.onTestBtn)
-        self.divideStepWidget.connect('coordinatesChanged(double *)',
-                                      self.onDivideStepWidgetChanged)
 
     #
-    # Response functions
+    # Getter & Setter
     #
-    def onVolumeSelect(self):
-        self.testBtn.enabled = self.volumeSelector1.currentNode()
-        self.cleanSceneBtn.enabled = self.volumeSelector1.currentNode()
-
-    def onVolumeSelectChanged(self):
-        if self.volumeSelector1.currentNode()is None:
-            self.testBtn.enabled = False
-            self.cleanSceneBtn.enabled = False
-        else:
-            self.testBtn.enabled = True
-            self.cleanSceneBtn.enabled = True
-
-    def onDivideStepWidgetChanged(self):
-        pass
-        # TODO: make this function fully work
-        # This function may be innecessary
-
     def getDivideStep(self):
         unicodeStep = self.divideStepWidget.coordinates  # unicode list
         if unicodeStep:
@@ -162,38 +132,47 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         return True
 
+    #
+    # Response functions
+    #
+    def onVolumeSelectChanged(self):
+        if self.volumeSelector1.currentNode()is None:
+            self.testBtn.enabled = False
+            self.testBtn2.enabled = False
+            self.cleanSceneBtn.enabled = False
+        else:
+            self.testBtn.enabled = True
+            self.testBtn2.enabled = True
+            self.cleanSceneBtn.enabled = True
+
     def onCleanSceneBtn(self):
         slicer.mrmlScene.Clear(0)
         self.cleanSceneBtn.enabled = False
         self.testBtn.enabled = False
-        self.shapeValue.setText('')
+        self.testBtn2.enabled = False
+        self.volumeLabel.setText("Volume:")
         self.numSubMatricesValue.setText('')
+        self.testBtn.setText("TEST 1")
         self.divideStepWidget.coordinates = '10, 10, 10'
 
     def onTestBtn(self):
-
-        # slicer.mrmlScene.Clear(0)
-
         logic = DivideImageLogic()
         logging.info("Logic is instantiated.")
 
         volumeNode = self.volumeSelector1.currentNode()
         ndarray = logic.getNdarray(volumeNode)
         ndarryShape = ndarray.shape
+        self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
         logging.debug("The shape of the ndarray: " + str(ndarryShape))
-        self.shapeValue.setText(ndarryShape)
 
         # Get subMatrices with given step
-        # divideStep = (10, 10, 10)
-        unicodeStep = self.divideStepWidget.coordinates  # unicode list
-        divideStep = [int(x) for x in unicodeStep.split(',')]  # int list
-        self.divideStepValue.setText(divideStep)
+        divideStep = self.getDivideStep()
         subMatrices = logic.getSubMatrices(volumeNode, divideStep)
-        self.numSubMatricesValue.setText(len(subMatrices))
+        self.testBtn.setText(str(len(subMatrices)) + "\nSub Matrices")
 
         # TEST chop subMatrices
-        for subMatrix in subMatrices:
-            logic.chopSubMatrix(subMatrix)
+        # for subMatrix in subMatrices:
+        #     logic.chopSubMatrix(subMatrix)
 
         # TEST getCoords
         length = len(subMatrices)
@@ -201,11 +180,12 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.info("This is subMatrix No." + str(randomNum))
         coords = logic.getCoords(subMatrices[randomNum])
         if coords:
+            # self.delayDisplay("test")  # It should be used in `Test`
             logging.info("There are " + str(len(coords)) + " valid points in subMatrix " + str(randomNum))
             # num = 1
             # logging.info("Coords of valide point in subMatrix " + str(randomNum) + ":")
             # for coord in coords:
-            #     logging.info("No. " + str(num) + ": " + str(coord))  # SLOW
+            #     logging.info("No. " + str(num) + ": " + str(coord))  # SLOW!
             #     num = num + 1
         else:
             logging.info("subMatix " + str(randomNum) + " is invalid")
