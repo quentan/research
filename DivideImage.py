@@ -2,11 +2,15 @@
 Load an image as a numpy array and divide it into small ones
 """
 import os
+import sys
 import qt
 import slicer
 import ctk
 # import math
 import numpy as np
+import vtk
+from vtk.util import numpy_support
+# from vtk.util import vtkImageImportFromArray
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleWidget
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleLogic
@@ -181,7 +185,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         coords = logic.getCoords(subMatrices[randomNum])
         if coords:
             # self.delayDisplay("test")  # It should be used in `Test`
-            logging.info("There are " + str(len(coords)) + " valid points in subMatrix " + str(randomNum))
+            logging.info("There are " + str(len(coords)) +
+                         " valid points in subMatrix " + str(randomNum))
             # num = 1
             # logging.info("Coords of valide point in subMatrix " + str(randomNum) + ":")
             # for coord in coords:
@@ -197,10 +202,34 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # logic.showVolume(self.volumeSelector1.currentNode())
         # logic.getImageInfo(imageData)
 
+    def onTestBtn2(self):
+        logic = DivideImageLogic()
+        logging.info("Logic is instantiated.")
+
+        volumeNode = self.volumeSelector1.currentNode()
+        ndarray = logic.getNdarray(volumeNode)
+        ndarryShape = ndarray.shape
+        self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
+        logging.debug("The shape of the ndarray: " + str(ndarryShape))
+
+        # ---
+        # Get subMatrices with given step
+        divideStep = self.getDivideStep()
+        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        # self.testBtn.setText(str(len(subMatrices)) + "\nSub Matrices")
+
+        i = 3711
+        logging.info("This is subMatix " + str(i))
+        coords = logic.getCoords(subMatrices[i])  # type 'list'
+        logging.info("It has " + str(len(coords)) + " points")
+        vectorColume = logic.implicitFitting(coords)
+        logging.info("Vector of colume:\n" + str(vectorColume))
 
 #
 # Logic
 #
+
+
 class DivideImageLogic(ScriptedLoadableModuleLogic):
 
     def hasImageData(self, volumeNode):
@@ -280,10 +309,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         length = len(subMatrix)
         num = 0
 
-        # for index, item in enumerate(subMatrix.flatten()):
-        #     if item >= range[0] and item <= range[1]:
-        #         num = num + 1
-
         for index, item in np.ndenumerate(subMatrix):
             if item >= range[0] and item <= range[1]:
                 num = num + 1
@@ -295,21 +320,21 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         else:
             return False
 
-        # TODO: use ndenumerate to do the stuff. Done!
-
     def getCoords(self, subMatrix, range=[90, 100]):
         """
-        Return coords of valid point from a subMatrix
-        Return `False` if the subMatix is invalid
+        :return
+        coords of valid point from a subMatrix or`False` if the subMatix is invalid
+        :note
+        `implicitFitting` requires `ndarray`
         """
         coords = []
         for coord, value in np.ndenumerate(subMatrix):
             if value >= range[0] and value <= range[1]:
-                coords.append(coord)
+                coords.append(coord)  # type 'list'
 
         if len(coords) / len(subMatrix) >= 0.1:
             logging.debug("Valid subMatrix")
-            return coords
+            return np.asarray(coords)  # type 'numpy.ndarray'
         else:
             logging.info("Invalid subMatrix")
             return False
@@ -353,6 +378,118 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         selectionNode.SetSecondaryVolumeID(volumeNode.GetID())
         applicationLogic.PropagateForegroundVolumeSelection(0)
 
+    def implicitFitting(self, data):
+        """
+        Find the fitting according to input dataset
+        :param data: point_num*3 matrix, every row is a 3D point
+        :return: colume vector: point_num*1
+        """
+
+        num_points = len(data)
+
+        A = np.zeros((num_points, num_points))
+
+        for i in range(num_points):
+            for j in range(i + 1, num_points):
+                A[i, j] = np.linalg.norm(data[i, :] - data[j, :])
+                A[j, i] = A[i, j]
+
+        dx = data[:, 0]
+        dy = data[:, 1]
+        dz = data[:, 2]
+
+        dx = dx.reshape(num_points, 1)
+        dy = dy.reshape(num_points, 1)
+        dz = dz.reshape(num_points, 1)
+
+        B = np.hstack((np.ones((num_points, 1)),
+                       2 * dx, 2 * dy, 2 * dz,
+                       2 * dx * dy, 2 * dx * dz, 2 * dy * dz,
+                       dx * dx, dy * dy, dz * dz)
+                      )
+        # B_t = np.transpose(B)
+        # M = [[A, B], [B_t, np.zeros((10, 10))]]  # It is symmetric
+
+        M_t1 = np.concatenate((A, B.T))
+        M_t2 = np.concatenate((B, np.zeros((10, 10))))
+        M = np.concatenate((M_t1, M_t2), axis=1)  # It is sysmmetric
+
+        k = 1000
+        C0 = np.zeros((3, 3))
+        C1 = np.diag([-k] * 3)
+        C2 = np.ones((3, 3)) * (k - 2) / 2.0
+        np.fill_diagonal(C2, -1)
+        C11 = np.concatenate((C1, C0))
+        C22 = np.concatenate((C0, C2))
+        C = np.concatenate((C11, C22), axis=1)
+
+        M11 = M[0:-6, 0:-6]  # (num_points) * (num_points)
+        M12 = M[0:-6, -6:]  # (num_point-6) * 6
+        M22 = M[-6:, -6:]  # 6 * 6 zero matrix
+
+        pinvM11 = np.linalg.pinv(M11)
+        M0 = np.dot(pinvM11, M12)
+        M00 = M22 - np.dot(M12.T, M0)
+
+        # TODO: Review Li's Matlab code for this computation
+        if np.all(np.linalg.eigvals(M00)) > 0:  # Positive Definite
+            eigen_value, eigen_vec = np.linalg.eig(M00)
+            # pass
+        else:
+            M00 = np.dot(M00.T * M00)
+
+        # eigen_value, eigen_vec = sci.linalg.eig(M00, C)
+        # D = np.diag(eigen_value)
+        max_eigen_value = np.amax(eigen_value)
+        max_eigen_idx = np.argmax(eigen_value)
+
+        # Find the fitting
+        V1 = eigen_vec[:, max_eigen_idx]
+        V0 = np.dot(-M0, V1)
+        V = np.hstack((V0, V1))
+        V = V.reshape(num_points + 10, 1)
+
+        return V
+
+    def ndarray2vtkImageData(ndarray, cast_type=0,
+                             _spacing=[1, 1, 1], _origin=[-1, -1, -1]):
+        """
+        Convert a NumPy array to a vtkImageData, with a default casting type VTK_FLOAT
+        :param ndarray: input NumPy array, can be 3D array
+        :param cast_type: 10 means VTK_FLOAT
+        :return: a vtkImageData
+        """
+        # Convert numpy array to VTK array (vtkFloatArray)
+        vtk_data_array = numpy_support.numpy_to_vtk(
+            num_array=ndarray.transpose(2, 1, 0).ravel(),
+            deep=True,
+            array_type=vtk.VTK_FLOAT)
+
+        # Convert the VTK array to vtkImageData
+        img_vtk = vtk.vtkImageData()
+        img_vtk.SetDimensions(ndarray.shape)
+        img_vtk.SetSpacing(_spacing)
+        img_vtk.SetOrigin(_origin)  # default numpy origina is [-1, -1, -1]
+        img_vtk.GetPointData().SetScalars(vtk_data_array)  # is a vtkImageData
+
+        # casting
+        if cast_type == 0:  # No casting
+            return img_vtk
+
+        elif cast_type in [i for i in range(2, 12)]:
+            cast = vtk.vtkImageCast()
+            cast.SetInputData(img_vtk)
+            # cast.SetInputConnection(reader.GetOutputPort())
+            cast.SetOutputScalarType(cast_type)
+            cast.Update()
+            return cast.GetOutput()  # The output of `cast` is a vtkImageData
+
+        # Wrong cast type. Return the no-cast vtkImageData
+        else:
+            sys.stderr.write('Wrong Cast Type! It should be 2, 3, ..., or 11')
+            return img_vtk
+            # TODO: figure out usage of `stderr`
+
 
 #
 # Test
@@ -389,7 +526,6 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logging.info("Topleft + Bottomright: \n" + str(slice1 + slice2))
 
     def test2_DivideImage(self):
-
         """
         Generate a 10*10 array and get its sub-arrays with given steps.
         """
@@ -463,6 +599,6 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
-        moduleWidget.onTestBtn()
+        moduleWidget.onTestBtn2()
 
         logging.info("Test 4 finished.")
