@@ -431,14 +431,18 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         M0 = np.dot(pinvM11, M12)
         M00 = M22 - np.dot(M12.T, M0)
 
-        # TODO: Review Li's Matlab code for this computation
-        if np.all(np.linalg.eigvals(M00)) > 0:  # Positive Definite
+        eigvalsM00 = np.linalg.eigvals(M00)
+        if np.all(i > 0 for i in eigvalsM00) is True:  # Positive Definite
             eigen_value, eigen_vec = np.linalg.eig(M00)
-            # pass
+            logging.info("Positive Definite")
+            # NOTE: It seems this is never True!
         else:
             M00 = np.dot(M00.T * M00)
+            # eigen_value, eigen_vec = sci.linalg.eig(M00, C)  # Slicer4 has no
+            # SciPy
+            eigen_value, eigen_vec = np.linalg.eig(M00)
+            logging.info("NOT Positive Definite")
 
-        # eigen_value, eigen_vec = sci.linalg.eig(M00, C)
         # D = np.diag(eigen_value)
         max_eigen_value = np.amax(eigen_value)
         max_eigen_idx = np.argmax(eigen_value)
@@ -447,9 +451,55 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         V1 = eigen_vec[:, max_eigen_idx]
         V0 = np.dot(-M0, V1)
         V = np.hstack((V0, V1))
-        V = V.reshape(num_points + 10, 1)
+        V = V.reshape(num_points + 10, 1)  # a 1-column array
+        # NOTE: V is the found fitting!
 
         return V
+
+    #
+    # RBF Ellipsoid fitting
+    def radialBaseFunc(self, vector, data):
+
+        w = vector[-10:]
+        num_points = len(data)
+
+        # Stepping
+        data_min = data.min(0)
+        data_max = data.max(0)
+
+        step = 0.1
+        offset = 0.1
+        step_x = np.arange(data_min[0] - offset, data_max[0] + offset, step)
+        step_y = np.arange(data_min[1] - offset, data_max[1] + offset, step)
+        step_z = np.arange(data_min[2] - offset, data_max[2] + offset, step)
+
+        [x, y, z] = np.meshgrid(step_x, step_y, step_z)
+        # dim_x = len(x)
+        # dim_y = len(y)
+        # dim_z = len(z)
+        # dim_x, dim_y, dim_z = x.shape
+
+        # spacing = [(data_max[0] - data_min[0]) / (dim_x - 1.0),
+        #            (data_max[1] - data_min[1]) / (dim_y - 1.0),
+        #            (data_max[2] - data_min[2]) / (dim_z - 1.0)]
+
+        # spacing_2 = [(x.max() - x.min()) / (dim_x - 1.0),
+        #              (y.max() - y.min()) / (dim_y - 1.0),
+        #              (z.max() - z.min()) / (dim_z - 1.0)]
+
+        poly = w[0] * np.ones((x.shape)) + \
+            2 * w[1] * x + 2 * w[2] * y + 2 * w[3] * z + \
+            2 * w[4] * x * y + 2 * w[5] * x * z + 2 * w[6] * y * z + \
+            w[7] * x * x + w[8] * y * y + w[9] * z * z
+
+        radial = np.zeros((x.shape))
+        for i in range(num_points):
+            # radial = radial + v[i]*np.sqrt((x-dx[i])**2 + (y-dy[i])**2 + (z-dz[i])**2)
+            radial = radial + vector[i] * np.sqrt(
+                (x - data[i, 0])**2 + (y - data[i, 1])**2 + (z - data[i, 2])**2)
+
+        obj = poly + radial  # type 'numpy.ndarray'
+        return obj
 
     def ndarray2vtkImageData(ndarray, cast_type=0,
                              _spacing=[1, 1, 1], _origin=[-1, -1, -1]):
