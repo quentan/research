@@ -1,6 +1,9 @@
 """
 Load an image as a numpy array and divide it into small ones
 """
+
+# TODO: Visualise the fitting result.
+
 import os
 import sys
 import qt
@@ -224,6 +227,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.info("It has " + str(len(coords)) + " points")
         vectorColume = logic.implicitFitting(coords)
         logging.info("Vector of colume:\n" + str(vectorColume))
+        fittingResult = logic.radialBaseFunc(vectorColume, coords)
 
 #
 # Logic
@@ -265,7 +269,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     def getSubMatrices(self, volumeNode, step=[40] * 3):
         """
         Divide the big matrix into small ones according with `step`
-        Return an array containing these sub matrices
+        @param volumeNode   slicer.qMRMLNodeComboBox().currentNode()
+        @param step         shape of subMatrix
+        @return             an array containing these sub matrices
         """
 
         bigMatrix = self.getNdarray(volumeNode)
@@ -289,7 +295,10 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     # TEST function
     def chopSubMatrix(self, subMatrix, value=0):
         """
-        Make the hull of the given subMatrix to be `value`
+        A test foo of Making the hull of the given subMatrix to be `value`
+        @param subMatrix    a 3D array
+        @param value        grey value of the hull
+        @return boolen      `False` if the array is not 3D
         """
         if len(subMatrix.shape) == 3:
             subMatrix[0, :, :] = value
@@ -303,8 +312,12 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     # Deprecated
     def isValidMatrix(self, subMatrix, range=[90, 100]):
         """
-        Return `True` this matrix contains at least 10% points
-        in the range
+        **This foo has been Deprecated**
+        Determine the validation of subMatrix with a standard
+        The standarn could be complex
+        @param subMatrix    test array
+        @param range        a grey value range
+        @return boolen      `True` if contains at least 10% points in the range
         """
         length = len(subMatrix)
         num = 0
@@ -322,10 +335,12 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
     def getCoords(self, subMatrix, range=[90, 100]):
         """
-        :return
-        coords of valid point from a subMatrix or`False` if the subMatix is invalid
-        :note
-        `implicitFitting` requires `ndarray`
+        Get the coords of valid point from a subMatrix
+        NOTE: `implicitFitting` requires `ndarray`
+        @param subMatrix    array containing valide points
+        @param range        a grey value range
+        @return ndarray     a n*3 numpy array
+        @retrun False       invalid array
         """
         coords = []
         for coord, value in np.ndenumerate(subMatrix):
@@ -343,6 +358,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         """
         Record information of vtkImageData into a dict.
         All these info can be acquired by `imageData.GetXXX()`
+        @param imageData    vtkImageData var
+        @return dict        a dict containing these information
         """
         imageInfo = {}
         origin = imageData.GetOrigin()
@@ -381,8 +398,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     def implicitFitting(self, data):
         """
         Find the fitting according to input dataset
-        :param data: point_num*3 matrix, every row is a 3D point
-        :return: colume vector: point_num*1
+        @param data     point_num*3 array, every row is a 3D point
+        @return ndarray colume vector: point_num*1
         """
 
         num_points = len(data)
@@ -437,7 +454,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             logging.info("Positive Definite")
             # NOTE: It seems this is never True!
         else:
-            M00 = np.dot(M00.T * M00)
+            M00 = np.dot(M00.T, M00)
+            # FIXME: SciPy is required but Slicer4 cannot do it!
             # eigen_value, eigen_vec = sci.linalg.eig(M00, C)  # Slicer4 has no
             # SciPy
             eigen_value, eigen_vec = np.linalg.eig(M00)
@@ -451,19 +469,25 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         V1 = eigen_vec[:, max_eigen_idx]
         V0 = np.dot(-M0, V1)
         V = np.hstack((V0, V1))
-        V = V.reshape(num_points + 10, 1)  # a 1-column array
+        vector = V.reshape(num_points + 10, 1)  # a 1-column array
         # NOTE: V is the found fitting!
 
-        return V
+        return vector
 
     #
     # RBF Ellipsoid fitting
     def radialBaseFunc(self, vector, data):
+        """
+        Radial Basis Function fitting
+        @param vector   found fitting
+        @param data     point_num*3 array, every row is a 3D point
+        @return ndarray an object in ndarray format
+        """
 
         w = vector[-10:]
         num_points = len(data)
 
-        # Stepping
+        # Step
         data_min = data.min(0)
         data_max = data.max(0)
 
@@ -474,18 +498,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         step_z = np.arange(data_min[2] - offset, data_max[2] + offset, step)
 
         [x, y, z] = np.meshgrid(step_x, step_y, step_z)
-        # dim_x = len(x)
-        # dim_y = len(y)
-        # dim_z = len(z)
-        # dim_x, dim_y, dim_z = x.shape
-
-        # spacing = [(data_max[0] - data_min[0]) / (dim_x - 1.0),
-        #            (data_max[1] - data_min[1]) / (dim_y - 1.0),
-        #            (data_max[2] - data_min[2]) / (dim_z - 1.0)]
-
-        # spacing_2 = [(x.max() - x.min()) / (dim_x - 1.0),
-        #              (y.max() - y.min()) / (dim_y - 1.0),
-        #              (z.max() - z.min()) / (dim_z - 1.0)]
 
         poly = w[0] * np.ones((x.shape)) + \
             2 * w[1] * x + 2 * w[2] * y + 2 * w[3] * z + \
@@ -494,51 +506,62 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         radial = np.zeros((x.shape))
         for i in range(num_points):
-            # radial = radial + v[i]*np.sqrt((x-dx[i])**2 + (y-dy[i])**2 + (z-dz[i])**2)
             radial = radial + vector[i] * np.sqrt(
                 (x - data[i, 0])**2 + (y - data[i, 1])**2 + (z - data[i, 2])**2)
 
         obj = poly + radial  # type 'numpy.ndarray'
+        print("obj.shape: " + str(obj.shape))
+        print(obj)
         return obj
 
-    def ndarray2vtkImageData(ndarray, cast_type=0,
-                             _spacing=[1, 1, 1], _origin=[-1, -1, -1]):
+    def ndarray2vtkImageData(numpyArray, castType=0,
+                             spacing=[1, 1, 1], origin=[-1, -1, -1]):
         """
-        Convert a NumPy array to a vtkImageData, with a default casting type VTK_FLOAT
-        :param ndarray: input NumPy array, can be 3D array
-        :param cast_type: 10 means VTK_FLOAT
-        :return: a vtkImageData
+        Convert a NumPy array to a vtkImageData, no cast by default
+        :param numpyArray   input 3D NumPy array
+        :param castType:
+            0 - No casting
+            2 - VTK_CHAR
+            3 - VTK_UNSIGNED_CHAR
+            4 - VTK_SHORT
+            5 - VTK_UNSIGNED_SHORT
+            6 - VTK_INT
+            7 - VTK_UNSIGNED_INT
+            8 - VTK_LONG
+            9 - VTK_UNSIGNED_LONG
+            10 - VTK_FLOAT
+            11 - VTK_DOUBLE
+        :return: vtkImageData
         """
         # Convert numpy array to VTK array (vtkFloatArray)
         vtk_data_array = numpy_support.numpy_to_vtk(
-            num_array=ndarray.transpose(2, 1, 0).ravel(),
+            num_array=numpyArray.transpose(2, 1, 0).ravel(),
             deep=True,
             array_type=vtk.VTK_FLOAT)
 
         # Convert the VTK array to vtkImageData
         img_vtk = vtk.vtkImageData()
-        img_vtk.SetDimensions(ndarray.shape)
-        img_vtk.SetSpacing(_spacing)
-        img_vtk.SetOrigin(_origin)  # default numpy origina is [-1, -1, -1]
+        img_vtk.SetDimensions(numpyArray.shape)
+        img_vtk.SetSpacing(spacing)
+        img_vtk.SetOrigin(origin)  # default numpy origina is [-1, -1, -1]
         img_vtk.GetPointData().SetScalars(vtk_data_array)  # is a vtkImageData
 
         # casting
-        if cast_type == 0:  # No casting
+        if castType == 0:  # No casting
             return img_vtk
 
-        elif cast_type in [i for i in range(2, 12)]:
+        elif castType in [i for i in range(2, 12)]:
             cast = vtk.vtkImageCast()
             cast.SetInputData(img_vtk)
             # cast.SetInputConnection(reader.GetOutputPort())
-            cast.SetOutputScalarType(cast_type)
+            cast.SetOutputScalarType(castType)
             cast.Update()
             return cast.GetOutput()  # The output of `cast` is a vtkImageData
 
         # Wrong cast type. Return the no-cast vtkImageData
         else:
-            sys.stderr.write('Wrong Cast Type! It should be 2, 3, ..., or 11')
+            logging.ERROR("Wrong Cast Type! It MUST be 2, 3, ..., or 11")
             return img_vtk
-            # TODO: figure out usage of `stderr`
 
 
 #
