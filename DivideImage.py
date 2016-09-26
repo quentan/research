@@ -5,7 +5,6 @@ Load an image as a numpy array and divide it into small ones
 # TODO: Visualise the fitting result.
 
 import os
-import sys
 import qt
 import slicer
 import ctk
@@ -175,18 +174,28 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # Get subMatrices with given step
         divideStep = self.getDivideStep()
         subMatrices = logic.getSubMatrices(volumeNode, divideStep)
-        self.testBtn.setText(str(len(subMatrices)) + "\nSub Matrices")
 
         # TEST chop subMatrices
         # for subMatrix in subMatrices:
         #     logic.chopSubMatrix(subMatrix)
 
+        # Number of valid subMatrices
+        numValidSubMatrices = 0
+        for subMatrix in subMatrices:
+            if logic.isValidMatrix(subMatrix):
+                numValidSubMatrices = numValidSubMatrices + 1
+        logging.info("There are " + str(numValidSubMatrices) + " valid subMatrices")
+
+        self.testBtn.setText(str(numValidSubMatrices) + '/' +
+                             str(len(subMatrices)) + "\nValid Sub Matrices")
+
         # TEST getCoords
+        # Get coords from a valid random subMatrix
         length = len(subMatrices)
         randomNum = np.random.randint(length * 0.3, length * 0.7)
         logging.info("This is subMatrix No." + str(randomNum))
         coords = logic.getCoords(subMatrices[randomNum])
-        if coords:
+        if coords is not False:
             # self.delayDisplay("test")  # It should be used in `Test`
             logging.info("There are " + str(len(coords)) +
                          " valid points in subMatrix " + str(randomNum))
@@ -209,7 +218,15 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logic = DivideImageLogic()
         logging.info("Logic is instantiated.")
 
+        # Load data
         volumeNode = self.volumeSelector1.currentNode()
+
+        # Get the imageData from the data
+        imageData = logic.getImageData(volumeNode)
+        imageInfo = logic.getImageInfo(imageData)
+        logging.info("ImageInfo:\n" + str(imageInfo))
+
+        # Get the numpy array from the data
         ndarray = logic.getNdarray(volumeNode)
         ndarryShape = ndarray.shape
         self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
@@ -229,11 +246,10 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.info("Vector of colume:\n" + str(vectorColume))
         fittingResult = logic.radialBaseFunc(vectorColume, coords)
 
+
 #
 # Logic
 #
-
-
 class DivideImageLogic(ScriptedLoadableModuleLogic):
 
     def hasImageData(self, volumeNode):
@@ -326,7 +342,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             if item >= range[0] and item <= range[1]:
                 num = num + 1
 
-        logging.info("Number of valid point: " + str(num))  # SLOW!!
+        logging.debug("Number of valid point: " + str(num))  # SLOW!!
 
         if num / length >= 0.1:
             return True
@@ -385,7 +401,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                      'dataType': dataType
                      }
 
-        logging.info("imageInfo: \n" + str(imageInfo))
+        logging.debug("imageInfo: \n" + str(imageInfo))
         return imageInfo
 
     def showVolume(self, volumeNode):
@@ -510,8 +526,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                 (x - data[i, 0])**2 + (y - data[i, 1])**2 + (z - data[i, 2])**2)
 
         obj = poly + radial  # type 'numpy.ndarray'
-        print("obj.shape: " + str(obj.shape))
-        print(obj)
+        logging.debug("obj.shape: " + str(obj.shape))
+
         return obj
 
     def ndarray2vtkImageData(numpyArray, castType=0,
@@ -533,13 +549,13 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             11 - VTK_DOUBLE
         :return: vtkImageData
         """
-        # Convert numpy array to VTK array (vtkFloatArray)
+        # numpy array --> VTK array (vtkFloatArray)
         vtk_data_array = numpy_support.numpy_to_vtk(
             num_array=numpyArray.transpose(2, 1, 0).ravel(),
             deep=True,
             array_type=vtk.VTK_FLOAT)
 
-        # Convert the VTK array to vtkImageData
+        # VTK array (vtkFloatArray) --> vtkImageData
         img_vtk = vtk.vtkImageData()
         img_vtk.SetDimensions(numpyArray.shape)
         img_vtk.SetSpacing(spacing)
