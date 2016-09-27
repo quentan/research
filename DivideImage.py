@@ -19,7 +19,11 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModule
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleWidget
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleLogic
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleTest
-
+import sys
+sys.path.append('/Users/Quentan/anaconda/envs/py27/lib/python2.7/site-packages')
+import scipy
+import scipy.linalg
+# import scipy.io
 import logging
 logging.getLogger('').handlers = []
 # logging.basicConfig(level=logging.DEBUG)
@@ -563,9 +567,10 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         else:
             M00 = np.dot(M00.T, M00)
             # FIXME: SciPy is required but Slicer4 cannot do it!
-            # eigen_value, eigen_vec = sci.linalg.eig(M00, C)  # Slicer4 has no
+            # FIXED! manually import it using `sys.path.append('/usr/lib/python2.7/dist-packages')`
+            eigen_value, eigen_vec = scipy.linalg.eig(M00, C)  # Slicer4 has no
             # SciPy
-            eigen_value, eigen_vec = np.linalg.eig(M00)
+            # eigen_value, eigen_vec = np.linalg.eig(M00)
             logging.info("NOT Positive Definite")
 
         # D = np.diag(eigen_value)
@@ -775,8 +780,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
-        # moduleWidget.onTestBtn2()
+        moduleWidget.onTestBtn2()
         # moduleWidget.test_getSubMatrices()  # 29.6 seconds
-        moduleWidget.test_getValidSubMatrices()  # 29.2 seconds
+        # moduleWidget.test_getValidSubMatrices()  # 29.2 seconds
 
         logging.info("Test 4 finished.")
