@@ -1,14 +1,16 @@
 """
-Load an image as a numpy array and divide it into small ones
+1. Load an image as a numpy array and divide it into small ones
+2. Count the subMatrices with some standards
+3. Extract point coords from valid subMatix and fit them into implicit surface
 """
 
 # TODO: Visualise the fitting result.
 
 import os
+import time
 import qt
 import slicer
 import ctk
-# import math
 import numpy as np
 import vtk
 from vtk.util import numpy_support
@@ -38,10 +40,12 @@ class DivideImage(ScriptedLoadableModule):
         self.parent.dependencies = []
         self.parent.contributors = ["Quan Qi (Univeristy of Hull)"]
         self.parent.helpText = """
-        Load an image as a numpy array and divide it into small ones
+        1. Load an image as a numpy array and divide it into small ones
+        <br><br>2. Count the subMatrices with some standards
+        <br><br>3. Extract point coords from valid subMatix and fit them into implicit surface
         """
         self.parent.acknowledgementText = """
-        Thanks for XXX.
+        Thanks.
         """
 
 
@@ -173,18 +177,27 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         # Get subMatrices with given step
         divideStep = self.getDivideStep()
-        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        # subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+
+        #
+        # TEST: Use getValidSubMatrices
+        startTime = time.time()
+        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
+        logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
+        numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
 
         # TEST chop subMatrices
         # for subMatrix in subMatrices:
         #     logic.chopSubMatrix(subMatrix)
 
-        # Number of valid subMatrices
-        numValidSubMatrices = 0
-        for subMatrix in subMatrices:
-            if logic.isValidMatrix(subMatrix):
-                numValidSubMatrices = numValidSubMatrices + 1
-        logging.info("There are " + str(numValidSubMatrices) + " valid subMatrices")
+        # Number of valid subMatrices.
+        # NOTE: SLOW!
+        # numValidSubMatrices = 0
+        # for subMatrix in subMatrices:
+        #     if logic.isValidMatrix(subMatrix):
+        #         numValidSubMatrices = numValidSubMatrices + 1
+        logging.info("There are " + str(numValidSubMatrices) +
+                     " valid subMatrices")
 
         self.testBtn.setText(str(numValidSubMatrices) + '/' +
                              str(len(subMatrices)) + "\nValid Sub Matrices")
@@ -232,12 +245,12 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
         logging.debug("The shape of the ndarray: " + str(ndarryShape))
 
-        # ---
+        #
         # Get subMatrices with given step
         divideStep = self.getDivideStep()
         subMatrices = logic.getSubMatrices(volumeNode, divideStep)
-        # self.testBtn.setText(str(len(subMatrices)) + "\nSub Matrices")
 
+        # TEST No. 3711 sbuMatrix
         i = 3711
         logging.info("This is subMatix " + str(i))
         coords = logic.getCoords(subMatrices[i])  # type 'list'
@@ -245,6 +258,53 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         vectorColume = logic.implicitFitting(coords)
         logging.info("Vector of colume:\n" + str(vectorColume))
         fittingResult = logic.radialBaseFunc(vectorColume, coords)
+        logging.info("Fitting Result as matrix:\n" + str(fittingResult))
+
+    # TEST cases
+    def test_getValidSubMatrices(self):
+        logic = DivideImageLogic()
+        logging.info("Logic is instantiated.")
+
+        volumeNode = self.volumeSelector1.currentNode()
+        ndarray = logic.getNdarray(volumeNode)
+        ndarryShape = ndarray.shape
+        self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
+        logging.debug("The shape of the ndarray: " + str(ndarryShape))
+
+        # Get subMatrices with given step
+        divideStep = self.getDivideStep()
+
+        startTime = time.time()
+        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
+        logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
+        numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
+
+        # logging.info("There are " + str(numValidSubMatrices) +
+        #              " valid subMatrices")
+        logging.info("There are %s valid subMatrices" % str(numValidSubMatrices))
+
+    def test_getSubMatrices(self):
+        logic = DivideImageLogic()
+        logging.info("Logic is instantiated.")
+
+        volumeNode = self.volumeSelector1.currentNode()
+        ndarray = logic.getNdarray(volumeNode)
+        ndarryShape = ndarray.shape
+        self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
+        logging.debug("The shape of the ndarray: " + str(ndarryShape))
+
+        # Get subMatrices with given step
+        divideStep = self.getDivideStep()
+
+        startTime = time.time()
+        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        numValidSubMatrices = 0
+        for subMatrix in subMatrices:
+            if logic.isValidMatrix(subMatrix):
+                numValidSubMatrices = numValidSubMatrices + 1
+        logging.info("--- getSubMatrices uses %s seconds ---" % (time.time() - startTime))
+
+        logging.info("There are %s valid subMatrices" % str(numValidSubMatrices))
 
 
 #
@@ -307,6 +367,37 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         logging.info("%d subMatrices generated" % len(subMatrices))
 
         return subMatrices
+
+    def getValidSubMatrices(self, volumeNode, step=[40] * 3):
+        """
+        Divide the big matrix into small ones according with `step`
+        Mark the valid subMatrices
+        @param volumeNode   slicer.qMRMLNodeComboBox().currentNode()
+        @param step         shape of subMatrix
+        @return             an array containing these sub matrices
+        """
+
+        bigMatrix = self.getNdarray(volumeNode)
+        shape = bigMatrix.shape
+        subMatrices = []
+        isValidSubMatrices = []
+        # num = 0
+
+        for i in range(0, shape[0], step[0]):
+            for j in range(0, shape[1], step[1]):
+                for k in range(0, shape[2], step[2]):
+                    subMatrix = bigMatrix[i:i + step[0],
+                                          j:j + step[1],
+                                          k:k + step[2]
+                                          ]
+                    subMatrices.append(subMatrix)
+
+                    isValid = self.isValidMatrix(subMatrix)
+                    isValidSubMatrices.append(isValid)
+
+        logging.info("%d subMatrices generated" % len(subMatrices))
+
+        return subMatrices, isValidSubMatrices
 
     # TEST function
     def chopSubMatrix(self, subMatrix, value=0):
@@ -663,14 +754,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.delayDisplay("Finished with download and loading")
 
         volumeNode = slicer.util.getNode(pattern="MR-head")
-        logic = DivideImageLogic()
-        self.assertTrue(logic.hasImageData(volumeNode))
-
-        # logic.getSubMatrix(volumeNode)  # Wrong! Do NOT access logic here
         moduleWidget = slicer.modules.DivideImageWidget
-
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
-        moduleWidget.onTestBtn()
+        moduleWidget.onTestBtn2()
 
         logging.info("Test 3 finished.")
 
@@ -688,6 +774,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
-        moduleWidget.onTestBtn2()
+
+        # moduleWidget.onTestBtn2()
+        # moduleWidget.test_getSubMatrices()  # 29.6 seconds
+        moduleWidget.test_getValidSubMatrices()  # 29.2 seconds
 
         logging.info("Test 4 finished.")
