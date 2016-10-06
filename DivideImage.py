@@ -19,11 +19,6 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModule
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleWidget
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleLogic
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleTest
-import sys
-sys.path.append('/Users/Quentan/anaconda/envs/py27/lib/python2.7/site-packages')
-import scipy
-import scipy.linalg
-# import scipy.io
 import logging
 logging.getLogger('').handlers = []
 # logging.basicConfig(level=logging.DEBUG)
@@ -550,6 +545,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         C11 = np.concatenate((C1, C0))
         C22 = np.concatenate((C0, C2))
         C = np.concatenate((C11, C22), axis=1)
+        invC = np.linalg.inv(C)  # for Generalised Eigenvalue Problem
 
         M11 = M[0:-6, 0:-6]  # (num_points) * (num_points)
         M12 = M[0:-6, -6:]  # (num_point-6) * 6
@@ -559,22 +555,27 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         M0 = np.dot(pinvM11, M12)
         M00 = M22 - np.dot(M12.T, M0)
 
-        eigvalsM00 = np.linalg.eigvals(M00)
-        if np.all(i > 0 for i in eigvalsM00) is True:  # Positive Definite
-            eigen_value, eigen_vec = np.linalg.eig(M00)
-            logging.info("Positive Definite")
-            # NOTE: It seems this is never True!
-        else:
+        # eigvalsM00 = np.linalg.eigvals(M00)
+        # if np.all(i > 0 for i in eigvalsM00) is True:  # Positive Definite
+        #     eigen_value, eigen_vec = np.linalg.eig(M00)
+        #     logging.info("Positive Definite")
+        #     # NOTE: It seems this is never True!
+        # else:
+        #     M00 = np.dot(M00.T, M00)
+        #     # using np's eig(dot(inv(C),M00)) instead of SciPy's eig
+        #     eigen_value, eigen_vec = np.linalg.eig(np.dot(invC, M00))
+        #
+        #     logging.info("NOT Positive Definite")
+
+        eigen_value, eigen_vec = np.linalg.eig(M00)
+        if np.all(i > 0 for i in eigen_value) is not True:  # Not positive
             M00 = np.dot(M00.T, M00)
-            # FIXME: SciPy is required but Slicer4 cannot do it!
-            # FIXED! manually import it using `sys.path.append('/usr/lib/python2.7/dist-packages')`
-            eigen_value, eigen_vec = scipy.linalg.eig(M00, C)  # Slicer4 has no
-            # SciPy
-            # eigen_value, eigen_vec = np.linalg.eig(M00)
-            logging.info("NOT Positive Definite")
+            # eigen_value, eigen_vec = sci.linalg.eig(M00, C)
+            eigen_value, eigen_vec = np.linalg.eig(np.dot(invC, M00))
+            print("Not Positive Definite")
 
         # D = np.diag(eigen_value)
-        max_eigen_value = np.amax(eigen_value)
+        # max_eigen_value = np.amax(eigen_value)
         max_eigen_idx = np.argmax(eigen_value)
 
         # Find the fitting
@@ -585,6 +586,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         # NOTE: V is the found fitting!
 
         return vector
+
+    def isPosDefMatrix(x):
+        return np.all(np.linalg.eigvals(x) > 0)
 
     #
     # RBF Ellipsoid fitting
@@ -630,8 +634,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                              spacing=[1, 1, 1], origin=[-1, -1, -1]):
         """
         Convert a NumPy array to a vtkImageData, no cast by default
-        :param numpyArray   input 3D NumPy array
-        :param castType:
+        @param numpyArray   input 3D NumPy array
+        @param castType
             0 - No casting
             2 - VTK_CHAR
             3 - VTK_UNSIGNED_CHAR
@@ -643,7 +647,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             9 - VTK_UNSIGNED_LONG
             10 - VTK_FLOAT
             11 - VTK_DOUBLE
-        :return: vtkImageData
+        @return vtkImageData
         """
         # numpy array --> VTK array (vtkFloatArray)
         vtk_data_array = numpy_support.numpy_to_vtk(
