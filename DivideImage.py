@@ -7,6 +7,7 @@
 # TODO: Visualise the fitting result.
 
 import os
+import sys
 import time
 import qt
 import slicer
@@ -180,14 +181,15 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         #
         # TEST: Use getValidSubMatrices
+        # NOTE: VERY slow
         startTime = time.time()
         subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
         logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
         numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
 
         # TEST chop subMatrices
-        # for subMatrix in subMatrices:
-        #     logic.chopSubMatrix(subMatrix)
+        for subMatrix in subMatrices:
+            logic.chopSubMatrix(subMatrix)
 
         # Number of valid subMatrices.
         # NOTE: SLOW!
@@ -226,6 +228,11 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # logic.showVolume(self.volumeSelector1.currentNode())
         # logic.getImageInfo(imageData)
 
+        # TEST: volume rendering
+        lm = slicer.app.layoutManager()
+        lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView)
+        self.showVolumeRendering(volumeNode)
+
     def onTestBtn2(self):
         logic = DivideImageLogic()
         logging.info("Logic is instantiated.")
@@ -258,6 +265,9 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.info("Vector of colume:\n" + str(vectorColume))
         fittingResult = logic.radialBaseFunc(vectorColume, coords)
         logging.info("Fitting Result as matrix:\n" + str(fittingResult))
+
+        # TEST: volume rendering
+        self.showVolumeRendering(volumeNode)
 
     # TEST cases
     def test_getValidSubMatrices(self):
@@ -305,6 +315,16 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         logging.info("There are %s valid subMatrices" % str(numValidSubMatrices))
 
+    def showVolumeRendering(self, volumeNode):
+        logic = slicer.modules.volumerendering.logic()
+        if sys.platform == 'darwin':  # GPU rendering does not work on Mac
+            displayNode = logic.CreateVolumeRenderingDisplayNode('vtkMRMLCPURayCastVolumeRenderingDisplayNode')
+        else:
+            displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
+        slicer.mrmlScene.AddNode(displayNode)
+        displayNode.UnRegister(logic)
+        logic.UpdateDisplayNodeFromVolumeNode(displayNode, volumeNode)
+        volumeNode.AddAndObserveDisplayNodeID(displayNode.GetID())
 
 #
 # Logic
@@ -692,8 +712,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.setUp()
         # self.test1_DivideImage()
         # self.test2_DivideImage()
-        # self.test3_DivideImage()
-        self.test4_DivideImage()
+        self.test3_DivideImage()
+        # self.test4_DivideImage()
 
     def test1_DivideImage(self):
         """
