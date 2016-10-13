@@ -13,6 +13,9 @@ import qt
 import slicer
 import ctk
 import numpy as np
+from multiprocessing import Pool
+from multiprocessing.dummy import Pool as ThreadPool
+
 import vtk
 from vtk.util import numpy_support
 # from vtk.util import vtkImageImportFromArray
@@ -20,6 +23,7 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModule
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleWidget
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleLogic
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleTest
+
 import logging
 logging.getLogger('').handlers = []
 # logging.basicConfig(level=logging.DEBUG)
@@ -177,19 +181,31 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         # Get subMatrices with given step
         divideStep = self.getDivideStep()
-        # subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
 
         #
         # TEST: Use getValidSubMatrices
         # NOTE: VERY slow
-        startTime = time.time()
-        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
-        logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
-        numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
+        # startTime = time.time()
+        # subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
+        # logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
+        # numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
 
         # TEST chop subMatrices
-        for subMatrix in subMatrices:
-            logic.chopSubMatrix(subMatrix)
+        # startTime = time.time()
+        # for subMatrix in subMatrices:
+        #     logic.chopSubMatrix(subMatrix)
+        # logging.info("Time taken: {}".format(time.time() - startTime))
+
+
+        # TEST chop subMatrices with multiprocessing
+        threadNum = 8
+        startTime = time.time()
+        pool = ThreadPool(threadNum)
+        pool.map(logic.chopSubMatrix, subMatrices)
+        pool.close()
+        pool.join()
+        logging.info("Time taken: {}".format(time.time() - startTime))
 
         # Number of valid subMatrices.
         # NOTE: SLOW!
