@@ -192,20 +192,19 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
 
         # TEST chop subMatrices
-        # startTime = time.time()
-        # for subMatrix in subMatrices:
-        #     logic.chopSubMatrix(subMatrix)
-        # logging.info("Time taken: {}".format(time.time() - startTime))
-
+        startTime = time.time()
+        for subMatrix in subMatrices:
+            logic.chopSubMatrix(subMatrix)
+        logging.info("Time taken: {}".format(time.time() - startTime))
 
         # TEST chop subMatrices with multiprocessing
-        threadNum = 8
-        startTime = time.time()
-        pool = ThreadPool(threadNum)
-        pool.map(logic.chopSubMatrix, subMatrices)
-        pool.close()
-        pool.join()
-        logging.info("Time taken: {}".format(time.time() - startTime))
+        # threadNum = 8
+        # startTime = time.time()
+        # pool = ThreadPool(threadNum)
+        # pool.map(logic.chopSubMatrix, subMatrices)
+        # pool.close()
+        # pool.join()
+        # logging.info("Time taken: {}".format(time.time() - startTime))
 
         # Number of valid subMatrices.
         # NOTE: SLOW!
@@ -342,6 +341,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logic.UpdateDisplayNodeFromVolumeNode(displayNode, volumeNode)
         volumeNode.AddAndObserveDisplayNodeID(displayNode.GetID())
 
+
 #
 # Logic
 #
@@ -454,7 +454,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     # Deprecated
     def isValidMatrix(self, subMatrix, range=[90, 100]):
         """
-        **This foo has been Deprecated**
         Determine the validation of subMatrix with a standard
         The standarn could be complex
         @param subMatrix    test array
@@ -464,9 +463,16 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         length = len(subMatrix)
         num = 0
 
-        for index, item in np.ndenumerate(subMatrix):
-            if item >= range[0] and item <= range[1]:
-                num = num + 1
+        # for index, item in np.ndenumerate(subMatrix):
+        #     if item >= range[0] and item <= range[1]:
+        #         num = num + 1
+
+        # TEST: vectorise the loop
+        x = subMatrix
+        y1 = x >= range[0]
+        y2 = x <= range[1]
+        y = y1 * y2
+        num = np.sum(y)
 
         logging.debug("Number of valid point: " + str(num))  # SLOW!!
 
@@ -728,8 +734,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.setUp()
         # self.test1_DivideImage()
         # self.test2_DivideImage()
-        self.test3_DivideImage()
-        # self.test4_DivideImage()
+        # self.test3_DivideImage()
+        self.test4_DivideImage()
 
     def test1_DivideImage(self):
         """
@@ -820,8 +826,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
-        moduleWidget.onTestBtn2()
-        # moduleWidget.test_getSubMatrices()  # 29.6 seconds
+        # moduleWidget.onTestBtn2()
+        moduleWidget.test_getSubMatrices()  # 29.6 seconds
         # moduleWidget.test_getValidSubMatrices()  # 29.2 seconds
 
         logging.info("Test 4 finished.")
