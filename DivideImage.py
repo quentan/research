@@ -186,16 +186,16 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         #
         # TEST: Use getValidSubMatrices
         # NOTE: VERY slow
-        # startTime = time.time()
-        # subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
-        # logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
-        # numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
+        startTime = time.time()
+        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
+        logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
+        numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
 
         # TEST chop subMatrices
-        startTime = time.time()
-        for subMatrix in subMatrices:
-            logic.chopSubMatrix(subMatrix)
-        logging.info("Time taken: {}".format(time.time() - startTime))
+        # startTime = time.time()
+        # for subMatrix in subMatrices:
+        #     logic.chopSubMatrix(subMatrix)
+        # logging.info("Time taken: {}".format(time.time() - startTime))
 
         # TEST chop subMatrices with multiprocessing
         # threadNum = 8
@@ -469,7 +469,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         # TEST: vectorise the loop
         x = subMatrix
-        y1 = x >= range[0]
+        y1 = x >= range[0]  # boolean
         y2 = x <= range[1]
         y = y1 * y2
         num = np.sum(y)
@@ -491,9 +491,17 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         @retrun False       invalid array
         """
         coords = []
-        for coord, value in np.ndenumerate(subMatrix):
-            if value >= range[0] and value <= range[1]:
-                coords.append(coord)  # type 'list'
+        # for coord, value in np.ndenumerate(subMatrix):
+        #     if value >= range[0] and value <= range[1]:
+        #         coords.append(coord)  # type 'list'
+
+        x = subMatrix
+        y1 = x >= range[0]
+        y2 = x <= range[1]
+        y = y1 * y2
+        for coord, value in np.ndenumerate(y):
+            if value is True:
+                coords.append(coord)
 
         if len(coords) / len(subMatrix) >= 0.1:
             logging.debug("Valid subMatrix")
@@ -826,8 +834,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
-        # moduleWidget.onTestBtn2()
-        moduleWidget.test_getSubMatrices()  # 29.6 seconds
+        moduleWidget.onTestBtn()
+        # moduleWidget.test_getSubMatrices()  # ~29.6~ --> 0.039 seconds
         # moduleWidget.test_getValidSubMatrices()  # 29.2 seconds
 
         logging.info("Test 4 finished.")
