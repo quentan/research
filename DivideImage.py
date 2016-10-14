@@ -185,11 +185,14 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         #
         # TEST: Use getValidSubMatrices
-        # NOTE: VERY slow
+        # NOTE: ~VERY slow~ -> It's been very quick by vectorisation
         startTime = time.time()
         subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
         logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
         numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
+
+        logging.info("There are " + str(numValidSubMatrices) +
+                     " valid subMatrices")
 
         # TEST chop subMatrices
         # startTime = time.time()
@@ -206,35 +209,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # pool.join()
         # logging.info("Time taken: {}".format(time.time() - startTime))
 
-        # Number of valid subMatrices.
-        # NOTE: SLOW!
-        # numValidSubMatrices = 0
-        # for subMatrix in subMatrices:
-        #     if logic.isValidMatrix(subMatrix):
-        #         numValidSubMatrices = numValidSubMatrices + 1
-        logging.info("There are " + str(numValidSubMatrices) +
-                     " valid subMatrices")
-
         self.testBtn.setText(str(numValidSubMatrices) + '/' +
                              str(len(subMatrices)) + "\nValid Sub Matrices")
-
-        # TEST getCoords
-        # Get coords from a valid random subMatrix
-        length = len(subMatrices)
-        randomNum = np.random.randint(length * 0.3, length * 0.7)
-        logging.info("This is subMatrix No." + str(randomNum))
-        coords = logic.getCoords(subMatrices[randomNum])
-        if coords is not False:
-            # self.delayDisplay("test")  # It should be used in `Test`
-            logging.info("There are " + str(len(coords)) +
-                         " valid points in subMatrix " + str(randomNum))
-            # num = 1
-            # logging.info("Coords of valide point in subMatrix " + str(randomNum) + ":")
-            # for coord in coords:
-            #     logging.info("No. " + str(num) + ": " + str(coord))  # SLOW!
-            #     num = num + 1
-        else:
-            logging.info("subMatix " + str(randomNum) + " is invalid")
 
         # Update the image
         imageData = logic.getImageData(volumeNode)
@@ -243,7 +219,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # logic.showVolume(self.volumeSelector1.currentNode())
         # logic.getImageInfo(imageData)
 
-        # TEST: volume rendering
+        # volume rendering
         lm = slicer.app.layoutManager()
         lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView)
         self.showVolumeRendering(volumeNode)
@@ -330,6 +306,39 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         logging.info("There are %s valid subMatrices" % str(numValidSubMatrices))
 
+    def test_getCoords(self):
+        """
+        TEST getCoords
+        Get coords from a valid random subMatrix
+        """
+        logic = DivideImageLogic()
+        logging.info("Logic is instantiated.")
+
+        volumeNode = self.volumeSelector1.currentNode()
+        ndarray = logic.getNdarray(volumeNode)
+        ndarryShape = ndarray.shape
+        self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
+        logging.debug("The shape of the ndarray: " + str(ndarryShape))
+
+        # Get subMatrices with given step
+        divideStep = self.getDivideStep()
+
+        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        length = len(subMatrices)
+        randomNum = np.random.randint(length * 0.3, length * 0.7)
+        logging.info("This is subMatrix No." + str(randomNum))
+
+        startTime = time.time()
+        coords = logic.getCoords(subMatrices[randomNum])
+        logging.info("--- getCoords uses %s seconds ---" % (time.time() - startTime))
+
+        if coords is not False:
+            # self.delayDisplay("test")  # It should be used in `Test`
+            logging.info("There are " + str(len(coords)) +
+                         " valid points in subMatrix " + str(randomNum))
+        else:
+            logging.info("subMatix " + str(randomNum) + " is invalid")
+
     def showVolumeRendering(self, volumeNode):
         logic = slicer.modules.volumerendering.logic()
         if sys.platform == 'darwin':  # GPU rendering does not work on Mac
@@ -388,7 +397,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         bigMatrix = self.getNdarray(volumeNode)
         shape = bigMatrix.shape
         subMatrices = []
-        # num = 0
 
         for i in range(0, shape[0], step[0]):
             for j in range(0, shape[1], step[1]):
@@ -416,7 +424,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         shape = bigMatrix.shape
         subMatrices = []
         isValidSubMatrices = []
-        # num = 0
 
         for i in range(0, shape[0], step[0]):
             for j in range(0, shape[1], step[1]):
@@ -434,7 +441,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         return subMatrices, isValidSubMatrices
 
-    # TEST function
     def chopSubMatrix(self, subMatrix, value=0):
         """
         A test foo of Making the hull of the given subMatrix to be `value`
@@ -451,7 +457,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             logging.debug("Dimension of the give subMatix is not 3!")
             return False
 
-    # Deprecated
     def isValidMatrix(self, subMatrix, range=[90, 100]):
         """
         Determine the validation of subMatrix with a standard
@@ -467,7 +472,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         #     if item >= range[0] and item <= range[1]:
         #         num = num + 1
 
-        # TEST: vectorise the loop
+        # vectorise the loop. About 100 times faster than loop
         x = subMatrix
         y1 = x >= range[0]  # boolean
         y2 = x <= range[1]
@@ -491,17 +496,22 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         @retrun False       invalid array
         """
         coords = []
+        # Method 1. Very slow
         # for coord, value in np.ndenumerate(subMatrix):
         #     if value >= range[0] and value <= range[1]:
         #         coords.append(coord)  # type 'list'
 
-        x = subMatrix
-        y1 = x >= range[0]
-        y2 = x <= range[1]
+        y1 = subMatrix >= range[0]
+        y2 = subMatrix <= range[1]
         y = y1 * y2
-        for coord, value in np.ndenumerate(y):
-            if value is True:
-                coords.append(coord)
+
+        # Method 2. About 100 times faster than Method 1
+        # for coord, value in np.ndenumerate(y):
+        #     if value:  # NOTE: CANNOT be `value is True`
+        #         coords.append(coord)  # type 'list'
+
+        # Method 3. About 4 times faster than Method 2
+        coords = np.transpose(y.nonzero())  # type 'numpy.ndarray'
 
         if len(coords) / len(subMatrix) >= 0.1:
             logging.debug("Valid subMatrix")
@@ -618,11 +628,13 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         #     logging.info("NOT Positive Definite")
 
         eigen_value, eigen_vec = np.linalg.eig(M00)
-        if np.all(i > 0 for i in eigen_value) is not True:  # Not positive
+        positive = eigen_value > 0
+        if np.sum(positive) < len(positive):  # Not positive
+            # if np.all(i > 0 for i in eigen_value) is not True:  # Not positive
             M00 = np.dot(M00.T, M00)
             # eigen_value, eigen_vec = sci.linalg.eig(M00, C)
             eigen_value, eigen_vec = np.linalg.eig(np.dot(invC, M00))
-            print("Not Positive Definite")
+            logging.info("Not Positive Definite")
 
         # D = np.diag(eigen_value)
         # max_eigen_value = np.amax(eigen_value)
@@ -636,9 +648,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         # NOTE: V is the found fitting!
 
         return vector
-
-    def isPosDefMatrix(x):
-        return np.all(np.linalg.eigvals(x) > 0)
 
     #
     # RBF Ellipsoid fitting
@@ -834,8 +843,10 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
-        moduleWidget.onTestBtn()
+        # moduleWidget.onTestBtn()
+        moduleWidget.onTestBtn2()
         # moduleWidget.test_getSubMatrices()  # ~29.6~ --> 0.039 seconds
-        # moduleWidget.test_getValidSubMatrices()  # 29.2 seconds
+        # moduleWidget.test_getValidSubMatrices()  # 29.2 seconds --> 0.3595s
+        # moduleWidget.test_getCoords()  # 0.0004s --> 0.0001s
 
         logging.info("Test 4 finished.")
