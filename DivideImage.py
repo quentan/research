@@ -96,7 +96,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         _layout.addRow(self.divideStepLabel, self.divideStepWidget)
 
         # Test button No. 1
-        self.testBtn = qt.QPushButton("TEST 1")
+        self.testBtn = qt.QPushButton("Divide Image")
         self.testBtn.toolTip = "Autometic test work"
         self.testBtn.enabled = self.volumeSelector1.currentNode()
 
@@ -170,6 +170,10 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.divideStepWidget.coordinates = '10, 10, 10'
 
     def onTestBtn(self):
+        """
+        Divide the big image into small chunks
+        Title of the button will change
+        """
         logic = DivideImageLogic()
         logging.info("Logic is instantiated.")
 
@@ -181,15 +185,16 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         # Get subMatrices with given step
         divideStep = self.getDivideStep()
-        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        # subMatrices = logic.getSubMatrices(volumeNode, divideStep)
 
         #
         # TEST: Use getValidSubMatrices
         # NOTE: ~VERY slow~ -> It's been very quick by vectorisation
         startTime = time.time()
         subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
-        logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
         numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
+        # numValidSubMatrices = np.sum(isValidSubMatrices)
+        logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
 
         logging.info("There are " + str(numValidSubMatrices) +
                      " valid subMatrices")
@@ -225,6 +230,10 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.showVolumeRendering(volumeNode)
 
     def onTestBtn2(self):
+        """
+        Get the fitting points of a specific subMatix
+        Not visulaised yet
+        """
         logic = DivideImageLogic()
         logging.info("Logic is instantiated.")
 
@@ -234,7 +243,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # Get the imageData from the data
         imageData = logic.getImageData(volumeNode)
         imageInfo = logic.getImageInfo(imageData)
-        logging.info("ImageInfo:\n" + str(imageInfo))
+        logging.debug("ImageInfo:\n" + str(imageInfo))
 
         # Get the numpy array from the data
         ndarray = logic.getNdarray(volumeNode)
@@ -251,13 +260,14 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         i = 3711
         logging.info("This is subMatix " + str(i))
         coords = logic.getCoords(subMatrices[i])  # type 'list'
-        logging.info("It has " + str(len(coords)) + " points")
-        vectorColume = logic.implicitFitting(coords)
-        logging.info("Vector of colume:\n" + str(vectorColume))
-        fittingResult = logic.radialBaseFunc(vectorColume, coords)
-        logging.info("Fitting Result as matrix:\n" + str(fittingResult))
+        logging.info("subMatix " + str(i) + " has " + str(len(coords)) + " valid points")
 
-        # TEST: volume rendering
+        vectorColume = logic.implicitFitting(coords)
+        logging.debug("Vector of colume:\n" + str(vectorColume))
+        fittingResult = logic.radialBaseFunc(vectorColume, coords)
+        logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
+
+        # volume rendering
         self.showVolumeRendering(volumeNode)
 
     # TEST cases
@@ -473,11 +483,11 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         #         num = num + 1
 
         # vectorise the loop. About 100 times faster than loop
-        x = subMatrix
-        y1 = x >= range[0]  # boolean
-        y2 = x <= range[1]
+        y1 = subMatrix >= range[0]  # boolean
+        y2 = subMatrix <= range[1]
         y = y1 * y2
-        num = np.sum(y)
+        # num = np.sum(y)  # It is slower than its loop counterpart
+        num = sum(i is True for i in y)
 
         logging.debug("Number of valid point: " + str(num))  # SLOW!!
 
@@ -629,7 +639,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         eigen_value, eigen_vec = np.linalg.eig(M00)
         positive = eigen_value > 0
-        if np.sum(positive) < len(positive):  # Not positive
+        # if np.sum(positive) < len(positive):  # Not positive
+        if sum(i is True for i in positive) < len(positive):
             # if np.all(i > 0 for i in eigen_value) is not True:  # Not positive
             M00 = np.dot(M00.T, M00)
             # eigen_value, eigen_vec = sci.linalg.eig(M00, C)
@@ -844,9 +855,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
         # moduleWidget.onTestBtn()
-        moduleWidget.onTestBtn2()
+        # moduleWidget.onTestBtn2()
         # moduleWidget.test_getSubMatrices()  # ~29.6~ --> 0.039 seconds
-        # moduleWidget.test_getValidSubMatrices()  # 29.2 seconds --> 0.3595s
+        moduleWidget.test_getValidSubMatrices()  # 29.2 seconds --> 0.3595s
         # moduleWidget.test_getCoords()  # 0.0004s --> 0.0001s
 
         logging.info("Test 4 finished.")
