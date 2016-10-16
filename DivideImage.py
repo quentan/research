@@ -4,7 +4,7 @@
 3. Extract point coords from valid subMatix and fit them into implicit surface
 """
 
-# TODO: Visualise the fitting result.
+# TODO: Visualise the fitting result
 
 import os
 import sys
@@ -137,7 +137,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
             return False
 
     def setDivideStep(self, step=[10] * 3):
-        if len(step) is not 3:
+        if len(step) != 3:
             logging.debug("Step should be given as [intX, intY, intZ]")
             return False
 
@@ -259,7 +259,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # TEST No. 3711 sbuMatrix
         i = 3711
         logging.info("This is subMatix " + str(i))
-        coords = logic.getCoords(subMatrices[i])  # type 'list'
+        coords = logic.getCoords(subMatrices[i])
         logging.info("subMatix " + str(i) + " has " + str(len(coords)) + " valid points")
 
         vectorColume = logic.implicitFitting(coords)
@@ -525,9 +525,10 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         if len(coords) / len(subMatrix) >= 0.1:
             logging.debug("Valid subMatrix")
-            return np.asarray(coords)  # type 'numpy.ndarray'
+            # return np.asarray(coords)  # type 'numpy.ndarray'
+            return coords
         else:
-            logging.info("Invalid subMatrix")
+            logging.error("Invalid subMatrix")
             return False
 
     def getImageInfo(self, imageData):
@@ -587,13 +588,14 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                 A[i, j] = np.linalg.norm(data[i, :] - data[j, :])
                 A[j, i] = A[i, j]
 
-        dx = data[:, 0]
-        dy = data[:, 1]
-        dz = data[:, 2]
+        # NOTE: it's no use to transpose a 1D array
+        dx = data[:, 0].reshape(num_points, 1)
+        dy = data[:, 1].reshape(num_points, 1)
+        dz = data[:, 2].reshape(num_points, 1)
 
-        dx = dx.reshape(num_points, 1)
-        dy = dy.reshape(num_points, 1)
-        dz = dz.reshape(num_points, 1)
+        # dx = dx.reshape(num_points, 1)
+        # dy = dy.reshape(num_points, 1)
+        # dz = dz.reshape(num_points, 1)
 
         B = np.hstack((np.ones((num_points, 1)),
                        2 * dx, 2 * dy, 2 * dz,
@@ -855,9 +857,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
         # moduleWidget.onTestBtn()
-        # moduleWidget.onTestBtn2()
+        moduleWidget.onTestBtn2()
         # moduleWidget.test_getSubMatrices()  # ~29.6~ --> 0.039 seconds
-        moduleWidget.test_getValidSubMatrices()  # 29.2 seconds --> 0.3595s
+        # moduleWidget.test_getValidSubMatrices()  # 29.2 seconds --> 0.3595s
         # moduleWidget.test_getCoords()  # 0.0004s --> 0.0001s
 
         logging.info("Test 4 finished.")
