@@ -487,10 +487,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         y2 = subMatrix <= range[1]
         y = y1 * y2
         num = np.sum(y)  # It is slower than its loop counterpart
-        # FIXME: sum function works incorrectly
-        # num = sum(i is True for i in y)
+        # num = sum(i for i in y.ravel())
 
-        logging.info("Number of valid point: " + str(num))  # SLOW!!
+        logging.debug("Number of valid point: " + str(num))  # SLOW!!
 
         if num / length >= 0.1:
             return True
@@ -763,8 +762,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.setUp()
         # self.test1_DivideImage()
         # self.test2_DivideImage()
-        self.test3_DivideImage()
-        # self.test4_DivideImage()
+        # self.test3_DivideImage()
+        self.test4_DivideImage()
 
     def test1_DivideImage(self):
         """
