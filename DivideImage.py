@@ -13,8 +13,8 @@ import qt
 import slicer
 import ctk
 import numpy as np
-from multiprocessing import Pool
-from multiprocessing.dummy import Pool as ThreadPool
+# from multiprocessing import Pool
+# from multiprocessing.dummy import Pool as ThreadPool
 
 import vtk
 from vtk.util import numpy_support
@@ -486,10 +486,11 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         y1 = subMatrix >= range[0]  # boolean
         y2 = subMatrix <= range[1]
         y = y1 * y2
-        # num = np.sum(y)  # It is slower than its loop counterpart
-        num = sum(i is True for i in y)
+        num = np.sum(y)  # It is slower than its loop counterpart
+        # FIXME: sum function works incorrectly
+        # num = sum(i is True for i in y)
 
-        logging.debug("Number of valid point: " + str(num))  # SLOW!!
+        logging.info("Number of valid point: " + str(num))  # SLOW!!
 
         if num / length >= 0.1:
             return True
@@ -589,27 +590,25 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                 A[j, i] = A[i, j]
 
         # NOTE: it's no use to transpose a 1D array
-        dx = data[:, 0].reshape(num_points, 1)
-        dy = data[:, 1].reshape(num_points, 1)
-        dz = data[:, 2].reshape(num_points, 1)
+        # dx = data[:, 0].reshape(num_points, 1)
+        # dy = data[:, 1].reshape(num_points, 1)
+        # dz = data[:, 2].reshape(num_points, 1)
 
-        # dx = dx.reshape(num_points, 1)
-        # dy = dy.reshape(num_points, 1)
-        # dz = dz.reshape(num_points, 1)
+        dx = data[:, 0][None].T
+        dy = data[:, 1][None].T
+        dz = data[:, 2][None].T
 
         B = np.hstack((np.ones((num_points, 1)),
                        2 * dx, 2 * dy, 2 * dz,
                        2 * dx * dy, 2 * dx * dz, 2 * dy * dz,
                        dx * dx, dy * dy, dz * dz)
                       )
-        # B_t = np.transpose(B)
-        # M = [[A, B], [B_t, np.zeros((10, 10))]]  # It is symmetric
 
         M_t1 = np.concatenate((A, B.T))
         M_t2 = np.concatenate((B, np.zeros((10, 10))))
         M = np.concatenate((M_t1, M_t2), axis=1)  # It is sysmmetric
 
-        k = 1000
+        k = np.random.randint(4, 10000)
         C0 = np.zeros((3, 3))
         C1 = np.diag([-k] * 3)
         C2 = np.ones((3, 3)) * (k - 2) / 2.0
@@ -857,9 +856,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
         # moduleWidget.onTestBtn()
-        moduleWidget.onTestBtn2()
+        # moduleWidget.onTestBtn2()
         # moduleWidget.test_getSubMatrices()  # ~29.6~ --> 0.039 seconds
-        # moduleWidget.test_getValidSubMatrices()  # 29.2 seconds --> 0.3595s
+        moduleWidget.test_getValidSubMatrices()  # 29.2 seconds --> 0.3595s
         # moduleWidget.test_getCoords()  # 0.0004s --> 0.0001s
 
         logging.info("Test 4 finished.")
