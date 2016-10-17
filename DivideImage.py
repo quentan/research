@@ -763,8 +763,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.setUp()
         # self.test1_DivideImage()
         # self.test2_DivideImage()
-        # self.test3_DivideImage()
-        self.test4_DivideImage()
+        self.test3_DivideImage()
+        # self.test4_DivideImage()
 
     def test1_DivideImage(self):
         """
@@ -836,7 +836,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         volumeNode = slicer.util.getNode(pattern="MR-head")
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
-        moduleWidget.onTestBtn2()
+        moduleWidget.onTestBtn()
 
         logging.info("Test 3 finished.")
 
