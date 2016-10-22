@@ -227,7 +227,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # volume rendering
         lm = slicer.app.layoutManager()
         lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView)
-        self.showVolumeRendering(volumeNode)
+        # self.showVolumeRendering(volumeNode)
+        logic.showVolumeRendering(volumeNode)
 
     def onTestBtn2(self):
         """
@@ -268,7 +269,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
 
         # volume rendering
-        self.showVolumeRendering(volumeNode)
+        logic.showVolumeRendering(volumeNode)
 
     # TEST cases
     def test_getValidSubMatrices(self):
@@ -349,17 +350,6 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         else:
             logging.info("subMatix " + str(randomNum) + " is invalid")
 
-    def showVolumeRendering(self, volumeNode):
-        logic = slicer.modules.volumerendering.logic()
-        if sys.platform == 'darwin':  # GPU rendering does not work on Mac
-            displayNode = logic.CreateVolumeRenderingDisplayNode('vtkMRMLCPURayCastVolumeRenderingDisplayNode')
-        else:
-            displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
-        slicer.mrmlScene.AddNode(displayNode)
-        displayNode.UnRegister(logic)
-        logic.UpdateDisplayNodeFromVolumeNode(displayNode, volumeNode)
-        volumeNode.AddAndObserveDisplayNodeID(displayNode.GetID())
-
 
 #
 # Logic
@@ -427,7 +417,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         Mark the valid subMatrices
         @param volumeNode   slicer.qMRMLNodeComboBox().currentNode()
         @param step         shape of subMatrix
-        @return             an array containing these sub matrices
+        @return 1           an array containing these sub matrices
+        @return 2           a boolean array shows the validation of sub matrices
         """
 
         bigMatrix = self.getNdarray(volumeNode)
@@ -447,7 +438,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     isValid = self.isValidMatrix(subMatrix)
                     isValidSubMatrices.append(isValid)
 
-        logging.info("%d subMatrices generated" % len(subMatrices))
+        logging.debug("%d subMatrices generated" % len(subMatrices))
 
         return subMatrices, isValidSubMatrices
 
@@ -470,7 +461,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     def isValidMatrix(self, subMatrix, range=[90, 100]):
         """
         Determine the validation of subMatrix with a standard
-        The standarn could be complex
+        The standard could be complex
         @param subMatrix    test array
         @param range        a grey value range
         @return boolen      `True` if contains at least 10% points in the range
@@ -486,7 +477,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         y1 = subMatrix >= range[0]  # boolean
         y2 = subMatrix <= range[1]
         y = y1 * y2
-        num = np.sum(y)  # It is slower than its loop counterpart
+        num = np.sum(y)  # It is much much faster than its loop counterpart
         # num = sum(i for i in y.ravel())
 
         logging.debug("Number of valid point: " + str(num))  # SLOW!!
@@ -571,6 +562,21 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         selectionNode = applicationLogic.GetSelectionNode()
         selectionNode.SetSecondaryVolumeID(volumeNode.GetID())
         applicationLogic.PropagateForegroundVolumeSelection(0)
+
+    def showVolumeRendering(self, volumeNode):
+        """
+        Show the volume rendering in the 4th view layout
+        @volumeNode     `volumeSelector1.currentNode()`
+        """
+        logic = slicer.modules.volumerendering.logic()
+        if sys.platform == 'darwin':  # GPU rendering does not work on Mac
+            displayNode = logic.CreateVolumeRenderingDisplayNode('vtkMRMLCPURayCastVolumeRenderingDisplayNode')
+        else:
+            displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
+        slicer.mrmlScene.AddNode(displayNode)
+        displayNode.UnRegister(logic)
+        logic.UpdateDisplayNodeFromVolumeNode(displayNode, volumeNode)
+        volumeNode.AddAndObserveDisplayNodeID(displayNode.GetID())
 
     def implicitFitting(self, data):
         """
@@ -854,10 +860,10 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
-        # moduleWidget.onTestBtn()
+        moduleWidget.onTestBtn()
         # moduleWidget.onTestBtn2()
         # moduleWidget.test_getSubMatrices()  # ~29.6~ --> 0.039 seconds
-        moduleWidget.test_getValidSubMatrices()  # 29.2 seconds --> 0.3595s
+        # moduleWidget.test_getValidSubMatrices()  # 29.2 seconds --> 0.3595s
         # moduleWidget.test_getCoords()  # 0.0004s --> 0.0001s
 
         logging.info("Test 4 finished.")
