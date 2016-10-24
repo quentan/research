@@ -227,8 +227,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # volume rendering
         lm = slicer.app.layoutManager()
         lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView)
-        logic.showVolumeRendering(volumeNode)
-        # logic.showVtkImageData(imageData)
+        # logic.showVolumeRendering(volumeNode)
+        logic.showVtkImageData(imageData)
 
     def onTestBtn2(self):
         """
@@ -575,7 +575,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         @volumeNode     `volumeSelector1.currentNode()`
         """
         logic = slicer.modules.volumerendering.logic()
-        # REVIEW: Slicer 4.6 has fixed the GPU issue on Mac!
+        # REVIEW: Slicer 4.6 has fixed the GPU volume rendering issue on Mac!
         # if sys.platform == 'darwin':  # GPU rendering does not work on Mac
         #     displayNode = logic.CreateVolumeRenderingDisplayNode('vtkMRMLCPURayCastVolumeRenderingDisplayNode')
         # else:
@@ -602,7 +602,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         volumeNode.SetAndObserveDisplayNodeID(displayNode.GetID())
         displayNode.SetAndObserveColorNodeID('vtkMRMLColorTableNodeGrey')
 
-        displayNode.AddViewNode(volumeNode)
+        # displayNode.AddViewNode(volumeNode)
 
     def implicitFitting(self, data):
         """
@@ -795,8 +795,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         self.setUp()
         # self.test1_DivideImage()
         # self.test2_DivideImage()
-        # self.test3_DivideImage()
-        self.test4_DivideImage()
+        self.test3_DivideImage()
+        # self.test4_DivideImage()
+        # self.test_EmptyVolume()
 
     def test1_DivideImage(self):
         """
@@ -894,3 +895,28 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # moduleWidget.test_getCoords()  # 0.0004s --> 0.0001s
 
         logging.info("Test 4 finished.")
+
+    def test_EmptyVolume(self):
+        imageSize = [64] * 3
+        imageSpacing = [1.0, 1.0, 1.0]
+        voxelType = vtk.VTK_UNSIGNED_CHAR
+        # Create an empty image volume
+        imageData = vtk.vtkImageData()
+        imageData.SetDimensions(imageSize)
+        imageData.AllocateScalars(voxelType, 1)
+        thresholder = vtk.vtkImageThreshold()
+        thresholder.SetInputData(imageData)
+        thresholder.SetInValue(0)
+        thresholder.SetOutValue(0)
+        # Create volume node
+        volumeNode = slicer.vtkMRMLScalarVolumeNode()
+        volumeNode.SetSpacing(imageSpacing)
+        volumeNode.SetImageDataConnection(thresholder.GetOutputPort())
+        # Add volume to scene
+        slicer.mrmlScene.AddNode(volumeNode)
+        displayNode = slicer.vtkMRMLScalarVolumeDisplayNode()
+        slicer.mrmlScene.AddNode(displayNode)
+        colorNode = slicer.util.getNode('Grey')
+        displayNode.SetAndObserveColorNodeID(colorNode.GetID())
+        volumeNode.SetAndObserveDisplayNodeID(displayNode.GetID())
+        volumeNode.CreateDefaultStorageNode()
