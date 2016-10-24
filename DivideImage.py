@@ -227,8 +227,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # volume rendering
         lm = slicer.app.layoutManager()
         lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView)
-        # self.showVolumeRendering(volumeNode)
         logic.showVolumeRendering(volumeNode)
+        # logic.showVtkImageData(imageData)
 
     def onTestBtn2(self):
         """
@@ -265,11 +265,17 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         vectorColume = logic.implicitFitting(coords)
         logging.debug("Vector of colume:\n" + str(vectorColume))
-        fittingResult = logic.radialBaseFunc(vectorColume, coords)
+        fittingResult = logic.radialBasisFunc(vectorColume, coords)
         logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
+        # print fittingResult.shape
 
         # volume rendering
-        logic.showVolumeRendering(volumeNode)
+        # logic.showVolumeRendering(volumeNode)
+
+        # Show vtkImageData
+        imageData = logic.ndarray2vtkImageData(fittingResult)
+        # print type(imageData)
+        logic.showVtkImageData(imageData)
 
     # TEST cases
     def test_getValidSubMatrices(self):
@@ -569,14 +575,34 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         @volumeNode     `volumeSelector1.currentNode()`
         """
         logic = slicer.modules.volumerendering.logic()
-        if sys.platform == 'darwin':  # GPU rendering does not work on Mac
-            displayNode = logic.CreateVolumeRenderingDisplayNode('vtkMRMLCPURayCastVolumeRenderingDisplayNode')
-        else:
-            displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
+        # REVIEW: Slicer 4.6 has fixed the GPU issue on Mac!
+        # if sys.platform == 'darwin':  # GPU rendering does not work on Mac
+        #     displayNode = logic.CreateVolumeRenderingDisplayNode('vtkMRMLCPURayCastVolumeRenderingDisplayNode')
+        # else:
+        #     displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
+        displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
         slicer.mrmlScene.AddNode(displayNode)
         displayNode.UnRegister(logic)
         logic.UpdateDisplayNodeFromVolumeNode(displayNode, volumeNode)
         volumeNode.AddAndObserveDisplayNodeID(displayNode.GetID())
+
+    def showVtkImageData(self, imageData):
+        """
+        Create a volume node from scratch
+        See "https://www.slicer.org/slicerWiki/index.php/Documentation/4.5/Modules/Volumes"
+        """
+        # imageData = vtk.vtkImageData()
+        # imageData.SetDimensions(dims)
+        # imageData.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)  # TODO: need change
+        volumeNode = slicer.vtkMRMLScalarVolumeNode()
+        volumeNode.SetAndObserveImageData(imageData)
+        displayNode = slicer.vtkMRMLScalarVolumeDisplayNode()
+        slicer.mrmlScene.AddNode(volumeNode)
+        slicer.mrmlScene.AddNode(displayNode)
+        volumeNode.SetAndObserveDisplayNodeID(displayNode.GetID())
+        displayNode.SetAndObserveColorNodeID('vtkMRMLColorTableNodeGrey')
+
+        displayNode.AddViewNode(volumeNode)
 
     def implicitFitting(self, data):
         """
@@ -668,7 +694,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
     #
     # RBF Ellipsoid fitting
-    def radialBaseFunc(self, vector, data):
+    def radialBasisFunc(self, vector, data):
         """
         Radial Basis Function fitting
         @param vector   found fitting
@@ -703,10 +729,11 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         obj = poly + radial  # type 'numpy.ndarray'
         logging.debug("obj.shape: " + str(obj.shape))
+        logging.debug("Type of obj: " + str(type(obj)))
 
         return obj
 
-    def ndarray2vtkImageData(numpyArray, castType=0,
+    def ndarray2vtkImageData(self, numpyArray, castType=0,
                              spacing=[1, 1, 1], origin=[-1, -1, -1]):
         """
         Convert a NumPy array to a vtkImageData, no cast by default
