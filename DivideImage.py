@@ -123,6 +123,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
                                      self.onVolumeSelectChanged)
         self.cleanSceneBtn.connect('clicked(bool)', self.onCleanSceneBtn)
         self.testBtn.connect('clicked(bool)', self.onTestBtn)
+        self.testBtn2.connect('clicked(bool)', self.onTestBtn2)
 
     #
     # Getter & Setter
@@ -189,21 +190,23 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         #
         # TEST: Use getValidSubMatrices
-        # NOTE: ~VERY slow~ -> It's been very quick by vectorisation
+        # REVIEW: ~VERY slow~ -> It's been very quick by vectorisation
         startTime = time.time()
-        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
-        numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
-        # numValidSubMatrices = np.sum(isValidSubMatrices)
-        logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
+        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(
+            volumeNode, divideStep)
+        # numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
+        numValidSubMatrices = np.sum(isValidSubMatrices)
+        logging.info("--- getValidSubMatrices uses %s seconds ---" %
+                     (time.time() - startTime))
 
         logging.info("There are " + str(numValidSubMatrices) +
                      " valid subMatrices")
 
         # TEST chop subMatrices
-        # startTime = time.time()
-        # for subMatrix in subMatrices:
-        #     logic.chopSubMatrix(subMatrix)
-        # logging.info("Time taken: {}".format(time.time() - startTime))
+        startTime = time.time()
+        for subMatrix in subMatrices:
+            logic.chopSubMatrix(subMatrix)
+        logging.info("Time taken: {}".format(time.time() - startTime))
 
         # TEST chop subMatrices with multiprocessing
         # threadNum = 8
@@ -227,8 +230,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # volume rendering
         lm = slicer.app.layoutManager()
         lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView)
-        # logic.showVolumeRendering(volumeNode)
-        logic.showVtkImageData(imageData)
+        logic.showVolumeRendering(volumeNode)
+        # logic.showVtkImageData(imageData)
 
     def onTestBtn2(self):
         """
@@ -256,12 +259,18 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         # Get subMatrices with given step
         divideStep = self.getDivideStep()
         subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(
+            volumeNode, divideStep)
+        # print len(isValidSubMatrices)
 
-        # TEST No. 3711 sbuMatrix
-        i = 3711
-        logging.info("This is subMatix " + str(i))
-        coords = logic.getCoords(subMatrices[i])
-        logging.info("subMatix " + str(i) + " has " + str(len(coords)) + " valid points")
+        # TEST: find a valid subMatrix and fitting the points
+        # i = 3711
+        idxValidMatrices = [i for i, x in enumerate(isValidSubMatrices) if x]
+        testValidMatrix = np.random.choice(idxValidMatrices)
+        logging.info("This is subMatix " + str(testValidMatrix))
+        coords = logic.getCoords(subMatrices[testValidMatrix])
+        logging.info("subMatix " + str(testValidMatrix) + " has " +
+                     str(len(coords)) + " valid points")
 
         vectorColume = logic.implicitFitting(coords)
         logging.debug("Vector of colume:\n" + str(vectorColume))
@@ -292,13 +301,16 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         divideStep = self.getDivideStep()
 
         startTime = time.time()
-        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(volumeNode, divideStep)
-        logging.info("--- getValidSubMatrices uses %s seconds ---" % (time.time() - startTime))
+        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(
+            volumeNode, divideStep)
+        logging.info("--- getValidSubMatrices uses %s seconds ---" %
+                     (time.time() - startTime))
         numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
 
         # logging.info("There are " + str(numValidSubMatrices) +
         #              " valid subMatrices")
-        logging.info("There are %s valid subMatrices" % str(numValidSubMatrices))
+        logging.info("There are %s valid subMatrices" %
+                     str(numValidSubMatrices))
 
     def test_getSubMatrices(self):
         logic = DivideImageLogic()
@@ -319,9 +331,11 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         for subMatrix in subMatrices:
             if logic.isValidMatrix(subMatrix):
                 numValidSubMatrices = numValidSubMatrices + 1
-        logging.info("--- getSubMatrices uses %s seconds ---" % (time.time() - startTime))
+        logging.info("--- getSubMatrices uses %s seconds ---" %
+                     (time.time() - startTime))
 
-        logging.info("There are %s valid subMatrices" % str(numValidSubMatrices))
+        logging.info("There are %s valid subMatrices" %
+                     str(numValidSubMatrices))
 
     def test_getCoords(self):
         """
@@ -347,7 +361,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         startTime = time.time()
         coords = logic.getCoords(subMatrices[randomNum])
-        logging.info("--- getCoords uses %s seconds ---" % (time.time() - startTime))
+        logging.info("--- getCoords uses %s seconds ---" %
+                     (time.time() - startTime))
 
         if coords is not False:
             # self.delayDisplay("test")  # It should be used in `Test`
@@ -439,10 +454,10 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           j:j + step[1],
                                           k:k + step[2]
                                           ]
-                    subMatrices.append(subMatrix)
+                    subMatrices.append(subMatrix)  # 1D list
 
                     isValid = self.isValidMatrix(subMatrix)
-                    isValidSubMatrices.append(isValid)
+                    isValidSubMatrices.append(isValid)  # 1D list
 
         logging.debug("%d subMatrices generated" % len(subMatrices))
 
@@ -579,7 +594,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         # if sys.platform == 'darwin':  # GPU rendering does not work on Mac
         #     displayNode = logic.CreateVolumeRenderingDisplayNode('vtkMRMLCPURayCastVolumeRenderingDisplayNode')
         # else:
-        #     displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
+        # displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU
+        # rendering
         displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
         slicer.mrmlScene.AddNode(displayNode)
         displayNode.UnRegister(logic)
@@ -593,7 +609,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         """
         # imageData = vtk.vtkImageData()
         # imageData.SetDimensions(dims)
-        # imageData.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)  # TODO: need change
+        # imageData.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)  # TODO: need
+        # change
         volumeNode = slicer.vtkMRMLScalarVolumeNode()
         volumeNode.SetAndObserveImageData(imageData)
         displayNode = slicer.vtkMRMLScalarVolumeDisplayNode()
@@ -673,7 +690,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         positive = eigen_value > 0
         # if np.sum(positive) < len(positive):  # Not positive
         if sum(i is True for i in positive) < len(positive):
-            # if np.all(i > 0 for i in eigen_value) is not True:  # Not positive
+            # if np.all(i > 0 for i in eigen_value) is not True:  # Not
+            # positive
             M00 = np.dot(M00.T, M00)
             # eigen_value, eigen_vec = sci.linalg.eig(M00, C)
             eigen_value, eigen_vec = np.linalg.eig(np.dot(invC, M00))
@@ -869,7 +887,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         volumeNode = slicer.util.getNode(pattern="MR-head")
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
-        moduleWidget.onTestBtn()
+        # moduleWidget.onTestBtn()
+        moduleWidget.onTestBtn2()
 
         logging.info("Test 3 finished.")
 
