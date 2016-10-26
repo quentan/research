@@ -607,8 +607,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         # if sys.platform == 'darwin':  # GPU rendering does not work on Mac
         #     displayNode = logic.CreateVolumeRenderingDisplayNode('vtkMRMLCPURayCastVolumeRenderingDisplayNode')
         # else:
-        # displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU
-        # rendering
+        # displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
+
         displayNode = logic.CreateVolumeRenderingDisplayNode()  # GPU rendering
         slicer.mrmlScene.AddNode(displayNode)
         displayNode.UnRegister(logic)
@@ -942,13 +942,19 @@ class DivideImageTest(ScriptedLoadableModuleTest):
     def test_Vtk(self):
         """
         Test basic VTK rendering in Slicer.
-        This code can also be run independet
+        This code can also be run independetly
         """
+        vtkVersion = vtk.vtkVersion()
+        logging.debug("VTK version: " + vtkVersion.GetVTKVersion())
+
         color_diffuse = [247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]
+
         # This creates a polygonal cylinder model with eight circumferential
         # facets.
         cylinder = vtk.vtkCylinderSource()
         cylinder.SetResolution(8)
+        cylinder.SetHeight(100)
+        cylinder.SetRadius(50)
 
         # The mapper is responsible for pushing the geometry into the graphics
         # library. It may also do color mapping, if scalars or other
@@ -969,8 +975,11 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # window. The render window interactor captures mouse events and will
         # perform appropriate camera or actor manipulation depending on the
         # nature of the events.
-        ren = vtk.vtkRenderer()
-        renWin = vtk.vtkRenderWindow()
+        # ren = vtk.vtkRenderer()
+        # renWin = vtk.vtkRenderWindow()
+        renWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
+        ren = renWin.GetRenderers().GetFirstRenderer()
+        ren.RemoveAllViewProps()
         renWin.AddRenderer(ren)
         iren = vtk.vtkRenderWindowInteractor()
         iren.SetRenderWindow(renWin)
