@@ -138,11 +138,16 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
             return False
 
     def setDivideStep(self, step=[10] * 3):
+        """
+        ctkCoordinatesWidget.coordinates needs unicode/str like: `u'10, 20, 30'`
+        """
         if len(step) != 3:
             logging.debug("Step should be given as [intX, intY, intZ]")
             return False
 
-        unicodeStep = [unicode(i) for i in step]  # coordinates need unicode
+        # unicodeStep = [unicode(i) for i in step]  # Wrong
+        unicodeStep = str(step)[1: -1]  # trim the `[]` symbol
+        print unicodeStep
         self.divideStepWidget.coordinates = unicodeStep
 
         return True
@@ -166,9 +171,9 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.testBtn.enabled = False
         self.testBtn2.enabled = False
         self.volumeLabel.setText("Volume:")
-        self.numSubMatricesValue.setText('')
+        # self.numSubMatricesValue.setText('')
         self.testBtn.setText("TEST 1")
-        self.divideStepWidget.coordinates = '10, 10, 10'
+        self.divideStepWidget.coordinates = '33, 10, 10'
 
     def onTestBtn(self):
         """
@@ -185,6 +190,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.debug("The shape of the ndarray: " + str(ndarryShape))
 
         # Get subMatrices with given step
+        self.setDivideStep(step=[20] * 3)
         divideStep = self.getDivideStep()
         # subMatrices = logic.getSubMatrices(volumeNode, divideStep)
 
@@ -199,8 +205,10 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.info("--- getValidSubMatrices uses %s seconds ---" %
                      (time.time() - startTime))
 
-        logging.info("There are " + str(numValidSubMatrices) +
-                     " valid subMatrices")
+        # logging.info("There are " + str(numValidSubMatrices) +
+        #              " valid subMatrices")
+        logging.info(str(numValidSubMatrices) + '/' + str(len(subMatrices)) +
+                     " valid subMatrices generated")
 
         # TEST chop subMatrices
         startTime = time.time()
@@ -257,34 +265,39 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         #
         # Get subMatrices with given step
+        self.setDivideStep([20] * 3)
         divideStep = self.getDivideStep()
-        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        # divideStep = [20] * 3
+        # subMatrices = logic.getSubMatrices(volumeNode, divideStep)
         subMatrices, isValidSubMatrices = logic.getValidSubMatrices(
             volumeNode, divideStep)
-        # print len(isValidSubMatrices)
+        numValidSubMatrices = np.sum(isValidSubMatrices)
+        logging.info(str(numValidSubMatrices) + '/' + str(len(subMatrices)) +
+                     " valid subMatrices generated")
 
         # TEST: find a valid subMatrix and fitting the points
         # i = 3711
         idxValidMatrices = [i for i, x in enumerate(isValidSubMatrices) if x]
         testValidMatrix = np.random.choice(idxValidMatrices)
-        logging.info("This is subMatix " + str(testValidMatrix))
+        # logging.info("This is subMatix " + str(testValidMatrix))
         coords = logic.getCoords(subMatrices[testValidMatrix])
-        logging.info("subMatix " + str(testValidMatrix) + " has " +
+        np.savetxt('/tmp/coords.txt', coords)
+        logging.info("Random subMatix " + str(testValidMatrix) + " has " +
                      str(len(coords)) + " valid points")
 
-        vectorColume = logic.implicitFitting(coords)
-        logging.debug("Vector of colume:\n" + str(vectorColume))
-        fittingResult = logic.radialBasisFunc(vectorColume, coords)
-        logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
-        # print fittingResult.shape
-
-        # volume rendering
-        # logic.showVolumeRendering(volumeNode)
-
-        # Show vtkImageData
-        imageData = logic.ndarray2vtkImageData(fittingResult)
-        # print type(imageData)
-        logic.showVtkImageData(imageData)
+        # vectorColume = logic.implicitFitting(coords)
+        # logging.debug("Vector of colume:\n" + str(vectorColume))
+        # fittingResult = logic.radialBasisFunc(vectorColume, coords)
+        # logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
+        # # print fittingResult.shape
+        #
+        # # volume rendering
+        # # logic.showVolumeRendering(volumeNode)
+        #
+        # # Show vtkImageData
+        # imageData = logic.ndarray2vtkImageData(fittingResult)
+        # # print type(imageData)
+        # logic.showVtkImageData(imageData)
 
     # TEST cases
     def test_getValidSubMatrices(self):
@@ -428,7 +441,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           ]
                     subMatrices.append(subMatrix)
 
-        logging.info("%d subMatrices generated" % len(subMatrices))
+        logging.debug("%d subMatrices generated" % len(subMatrices))
 
         return subMatrices
 
@@ -674,29 +687,14 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         M0 = np.dot(pinvM11, M12)
         M00 = M22 - np.dot(M12.T, M0)
 
-        # eigvalsM00 = np.linalg.eigvals(M00)
-        # if np.all(i > 0 for i in eigvalsM00) is True:  # Positive Definite
-        #     eigen_value, eigen_vec = np.linalg.eig(M00)
-        #     logging.info("Positive Definite")
-        #     # NOTE: It seems this is never True!
-        # else:
+        # eigen_value, eigen_vec = np.linalg.eig(M00)
+        # positive = eigen_value > 0
+        # if np.sum(positive) < len(positive):  # Not positive. Always False
         #     M00 = np.dot(M00.T, M00)
-        #     # using np's eig(dot(inv(C),M00)) instead of SciPy's eig
         #     eigen_value, eigen_vec = np.linalg.eig(np.dot(invC, M00))
-        #
-        #     logging.info("NOT Positive Definite")
+        #     logging.info("Not Positive Definite")
 
-        eigen_value, eigen_vec = np.linalg.eig(M00)
-        positive = eigen_value > 0
-        # if np.sum(positive) < len(positive):  # Not positive
-        if sum(i is True for i in positive) < len(positive):
-            # if np.all(i > 0 for i in eigen_value) is not True:  # Not
-            # positive
-            M00 = np.dot(M00.T, M00)
-            # eigen_value, eigen_vec = sci.linalg.eig(M00, C)
-            eigen_value, eigen_vec = np.linalg.eig(np.dot(invC, M00))
-            logging.info("Not Positive Definite")
-
+        eigen_value, eigen_vec = np.linalg.eig(np.dot(invC, M00))
         # D = np.diag(eigen_value)
         # max_eigen_value = np.amax(eigen_value)
         max_eigen_idx = np.argmax(eigen_value)
