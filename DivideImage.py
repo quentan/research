@@ -5,6 +5,7 @@
 """
 
 # TODO: Visualise the fitting result
+# TODO: Refer `ContourWidget.py` to add some interactive operation
 
 import os
 import sys
@@ -124,6 +125,29 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.cleanSceneBtn.connect('clicked(bool)', self.onCleanSceneBtn)
         self.testBtn.connect('clicked(bool)', self.onTestBtn)
         self.testBtn2.connect('clicked(bool)', self.onTestBtn2)
+
+    def initVTK(self, isInsideRenWin=True):
+        if isInsideRenWin:
+            self.renderWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
+            self.renderer = self.renderWin.GetRenderers().GetFirstRenderer()
+        else:
+            self.renderWin = vtk.vtkRenderWindow()
+            self.renderer = vtk.vtkRenderer()
+        self.iren = vtk.vtkRenderWindowInteractor()
+
+        # Depth peeling Parameters
+        self.maxPeels = 100
+        self.occlusion = 0.1
+
+        # Smoothness for visualisation
+        self.smoothIteration = 100
+        self.smoothFactor = 0.1
+        self.smoothAngle = 60
+
+        self.contour_manual = 0.0
+        # color_diffuse = [1.0, 1.0, 0.0]
+        self.colorDiffuse = [247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]
+        self.sampleDims = [100] * 3
 
     #
     # Getter & Setter
@@ -383,6 +407,107 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
                          " valid points in subMatrix " + str(randomNum))
         else:
             logging.info("subMatix " + str(randomNum) + " is invalid")
+
+
+#
+# VTK
+#
+class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
+
+    def __init__(self, isInsideRenWin=True):
+        # ScriptedLoadableModuleLogic.__init__(self, parent)
+        iren = vtk.vtkRenderWindowInteractor()
+
+        if isInsideRenWin:
+            renderWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
+            renderer = renderWin.GetRenderers().GetFirstRenderer()
+        else:
+            renderWin = vtk.vtkRenderWindow()
+            renderWin.SetSize(640, 480)
+            renderWin.SetWindowName("VTK Rendering View")
+
+            renderer = vtk.vtkRenderer()
+            renderer.SetBackground(0.2, 0.3, 0.4)
+
+            interactorStyle = vtk.vtkInteractorStyleTrackballCamera()
+            iren.SetInteractorStyle(interactorStyle)
+
+        self.renderWin = renderWin
+        self.renderer = renderer
+        self.iren = iren
+
+        # # Depth peeling Parameters
+        # self.maxPeels = 100
+        # self.occlusion = 0.1
+        #
+        # # Smoothness for visualisation
+        # self.smoothIteration = 100
+        # self.smoothFactor = 0.1
+        # self.smoothAngle = 60
+        #
+        # self.contour_manual = 0.0
+        # # color_diffuse = [1.0, 1.0, 0.0]
+        # self.colorDiffuse = [247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]
+        # self.sampleDims = [100] * 3
+
+    def __del__(self, isInsideRenWin=True):
+        # if isInsideRenWin:
+        #     self.renderWin.RemoveRenderer(self.renderer)
+        #     self.renderWin.__init__()
+        pass
+
+    def getActor(self, vtkSource, color=[247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]):
+        """
+        @vtkSource  type 'vtkobject'
+        @return     vtkActor
+        """
+
+        # Generate Normals
+        normals = vtk.vtkPolyDataNormals()
+        normals.SetInputConnection(vtkSource.GetOutputPort())
+        normals.SetFeatureAngle(60.0)
+        normals.ReleaseDataFlagOn()
+
+        stripper = vtk.vtkStripper()
+        stripper.SetInputConnection(normals.GetOutputPort())
+        stripper.ReleaseDataFlagOn()
+
+        mapper = vtk.vtkPolyDataMapper()
+        # mapper.SetInputConnection(vtkSource.GetOutputPort())
+        mapper.SetInputConnection(stripper.GetOutputPort())
+        mapper.SetScalarVisibility(False)
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.GetProperty().SetDiffuseColor(color)
+        actor.GetProperty().SetSpecular(0.3)
+        actor.GetProperty().SetSpecularPower(20)
+        actor.GetProperty().SetInterpolation(2)
+        # actor.GetProperty().SetRepresentation(2)
+        # actor.GetProperty().SetEdgeVisibility(True)
+        # actor.GetProperty().SetOpacity(opacity)
+
+        return actor
+
+    def vtkShow(self):
+        """
+        Construction of VTK renderering workflow
+        """
+        renderWin = self.renderWin
+        renderer = self.renderer
+        iren = self.iren
+
+        renderWin.AddRenderer(renderer)
+
+        iren = vtk.vtkRenderWindowInteractor()
+        iren.SetRenderWindow(renderWin)
+        iren.Initialize()
+
+        renderer.ResetCamera()
+        # renderer.GetActiveCamera().Zoom(1.5)
+        renderWin.Render()
+
+        iren.Start()
 
 
 #
@@ -806,6 +931,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
     def setUp(self):
         slicer.mrmlScene.Clear(0)
+        # renderer = slicer.app.layoutManager().threeDWidget(
+        #     0).threeDView().renderWindow().GetRenderers().GetFirstRenderer()
+        # renderer.RemoveAllViewProps()
 
     def runTest(self):
         self.setUp()
@@ -814,7 +942,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test3_DivideImage()
         # self.test4_DivideImage()
         # self.test_EmptyVolume()
-        self.test_Vtk()
+        # self.test_Vtk(False)
+        self.test_VTKLogic()
 
     def test1_DivideImage(self):
         """
@@ -915,6 +1044,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logging.info("Test 4 finished.")
 
     def test_EmptyVolume(self):
+        """
+        Generate an empty volume
+        """
         imageSize = [64] * 3
         imageSpacing = [1.0, 1.0, 1.0]
         voxelType = vtk.VTK_UNSIGNED_CHAR
@@ -939,7 +1071,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         volumeNode.SetAndObserveDisplayNodeID(displayNode.GetID())
         volumeNode.CreateDefaultStorageNode()
 
-    def test_Vtk(self):
+    def test_Vtk(self, isInsideRenWin=True):
         """
         Test basic VTK rendering in Slicer.
         This code can also be run independetly
@@ -952,7 +1084,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # This creates a polygonal cylinder model with eight circumferential
         # facets.
         cylinder = vtk.vtkCylinderSource()
-        cylinder.SetResolution(8)
+        cylinder.SetResolution(5)
         cylinder.SetHeight(100)
         cylinder.SetRadius(50)
 
@@ -975,11 +1107,14 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # window. The render window interactor captures mouse events and will
         # perform appropriate camera or actor manipulation depending on the
         # nature of the events.
-        # ren = vtk.vtkRenderer()
-        # renWin = vtk.vtkRenderWindow()
-        renWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
-        ren = renWin.GetRenderers().GetFirstRenderer()
-        ren.RemoveAllViewProps()
+        if isInsideRenWin:  # Render in Slicer's 3D view panel
+            renWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
+            ren = renWin.GetRenderers().GetFirstRenderer()
+        else:  # An independent VTK render window
+            ren = vtk.vtkRenderer()
+            renWin = vtk.vtkRenderWindow()
+        # FIXME: it's not wise to remove ALL vtkActor
+        # ren.RemoveAllViewProps()  # Remove previous vtkActor
         renWin.AddRenderer(ren)
         iren = vtk.vtkRenderWindowInteractor()
         iren.SetRenderWindow(renWin)
@@ -987,7 +1122,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # Add the actors to the renderer, set the background and size
         ren.AddActor(cylinderActor)
         ren.SetBackground(0.2, 0.3, 0.4)
-        renWin.SetSize(200, 200)
+        # renWin.SetSize(200, 200)  # Makes vtkActor too small
 
         # This allows the interactor to initalize itself. It has to be
         # called before an event loop.
@@ -1001,3 +1136,18 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         # Start the event loop.
         iren.Start()
+
+    def test_VTKLogic(self):
+        # vtkLogic = DivideImageVTKLogic(isInsideRenWin=False)
+        vtkLogic = DivideImageVTKLogic()
+
+        cylinder = vtk.vtkCylinderSource()
+        cylinder.SetResolution(4)
+        cylinder.SetHeight(100)
+        cylinder.SetRadius(50)
+
+        actor = vtkLogic.getActor(cylinder)
+        vtkLogic.renderer.AddActor(actor)
+        test = vtkLogic.renderer.GetActors()
+        print test
+        vtkLogic.vtkShow()
