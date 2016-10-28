@@ -8,7 +8,7 @@
 # TODO: Refer `ContourWidget.py` to add some interactive operation
 
 import os
-import sys
+# import sys
 import time
 import qt
 import slicer
@@ -130,38 +130,16 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         ScriptedLoadableModuleWidget.onReload(self)
 
         # DivideImageVTKLogic().clearActors()
+        # Clear vtkActor when reloading. But remain outline and direction symbols
         renderer = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow().GetRenderers().GetFirstRenderer()
         getActors = renderer.GetActors()
         numActor = getActors.GetNumberOfItems()
         logging.info("numActor in onReload: " + str(numActor))
-        if numActor > 10:
+        if numActor > 10:  # renderer has 10 actors when start
             counter = numActor - 10
             while counter > 0:
                 renderer.RemoveActor(getActors.GetLastActor())
                 counter -= 1
-
-    def initVTK(self, isInsideRenWin=True):
-        if isInsideRenWin:
-            self.renderWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
-            self.renderer = self.renderWin.GetRenderers().GetFirstRenderer()
-        else:
-            self.renderWin = vtk.vtkRenderWindow()
-            self.renderer = vtk.vtkRenderer()
-        self.iren = vtk.vtkRenderWindowInteractor()
-
-        # Depth peeling Parameters
-        self.maxPeels = 100
-        self.occlusion = 0.1
-
-        # Smoothness for visualisation
-        self.smoothIteration = 100
-        self.smoothFactor = 0.1
-        self.smoothAngle = 60
-
-        self.contour_manual = 0.0
-        # color_diffuse = [1.0, 1.0, 0.0]
-        self.colorDiffuse = [247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]
-        self.sampleDims = [100] * 3
 
     #
     # Getter & Setter
@@ -435,7 +413,6 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         if isInsideRenWin:
             renderWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
             renderer = renderWin.GetRenderers().GetFirstRenderer()
-            numActorInit = renderer.GetActors().GetNumberOfItems()
         else:
             renderWin = vtk.vtkRenderWindow()
             renderWin.SetSize(640, 480)
@@ -451,36 +428,11 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         self.renderer = renderer
         self.iren = iren
 
+        numActorInit = renderer.GetActors().GetNumberOfItems()
         self.numActorInit = numActorInit
         self.numActor = numActorInit
 
-        # # Depth peeling Parameters
-        # self.maxPeels = 100
-        # self.occlusion = 0.1
-        #
-        # # Smoothness for visualisation
-        # self.smoothIteration = 100
-        # self.smoothFactor = 0.1
-        # self.smoothAngle = 60
-        #
-        # self.contour_manual = 0.0
-        # # color_diffuse = [1.0, 1.0, 0.0]
-        # self.colorDiffuse = [247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]
-        # self.sampleDims = [100] * 3
-
     def __del__(self):
-        # if isInsideRenWin:
-        # renderer = self.renderer
-        #
-        # actorCollection = renderer.GetActors()
-        # numActorFinish = actorCollection.GetNumberOfItems()
-        # number = numActorFinish - self.numActorInit
-        # print number
-        # if number >= 0:
-        #     while number > 0:
-        #         renderer.RemoveActor(actorCollection.GetLastActor())
-        #
-        # self.renderer = renderer
         self.clearActors()
 
     def getActor(self, vtkSource, color=[247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]):
@@ -488,7 +440,6 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         @vtkSource  type 'vtkobject'
         @return     vtkActor
         """
-
         # Generate Normals
         normals = vtk.vtkPolyDataNormals()
         normals.SetInputConnection(vtkSource.GetOutputPort())
@@ -526,10 +477,10 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         """
         Clear all vtkActor but remain Slicer's outline and direction symbols
         """
-        num = self.numActor - self.numActorInit
-        while num > 0:
+        counter = self.numActor - self.numActorInit
+        while counter > 0:
             self.renderer.RemoveActor(self.renderer.GetActors().GetLastActor())
-            num -= 1
+            counter -= 1
             self.numActor -= 1
 
     def vtkShow(self):
@@ -963,7 +914,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         # Wrong cast type. Return the no-cast vtkImageData
         else:
-            logging.ERROR("Wrong Cast Type! It MUST be 2, 3, ..., or 11")
+            logging.error("Wrong Cast Type! It MUST be 2, 3, ..., or 11")
             return img_vtk
 
 
@@ -986,7 +937,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test4_DivideImage()
         # self.test_EmptyVolume()
         # self.test_Vtk(False)
-        self.test_VTKLogic()
+        # self.test_VTKLogic()
+        self.test_implicitFunction()
 
     def test1_DivideImage(self):
         """
@@ -1156,7 +1108,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         else:  # An independent VTK render window
             ren = vtk.vtkRenderer()
             renWin = vtk.vtkRenderWindow()
-        # FIXME: it's not wise to remove ALL vtkActor
+        # REVIEW: it's not wise to remove ALL vtkActor --> See onReload()
         # ren.RemoveAllViewProps()  # Remove previous vtkActor
         renWin.AddRenderer(ren)
         iren = vtk.vtkRenderWindowInteractor()
@@ -1186,11 +1138,34 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         cylinder = vtk.vtkCylinderSource()
         cylinder.SetResolution(5)
-        cylinder.SetHeight(100)
-        cylinder.SetRadius(50)
+        # cylinder.SetHeight(100)
+        # cylinder.SetRadius(50)
 
         actor = vtkLogic.getActor(cylinder)
         vtkLogic.addActor(actor)
-        numActor = vtkLogic.numActor
-        logging.info("numActor in test_VTKLogic: " + str(numActor))
+        logging.debug("numActor in test_VTKLogic: " + str(vtkLogic.numActor))
+        vtkLogic.vtkShow()
+
+    def test_implicitFunction(self):
+
+        vtkLogic = DivideImageVTKLogic()
+
+        coef = np.random.standard_normal(10)
+        contourVal = 0.0
+
+        quadric = vtk.vtkQuadric()
+        quadric.SetCoefficients(coef)
+
+        sample = vtk.vtkSampleFunction()
+        sample.SetImplicitFunction(quadric)
+        sample.ComputeNormalsOff()
+        # The bound of outline is this.
+        sample.SetModelBounds(-100, 100, -100, 100, -100, 100)
+
+        contour = vtk.vtkContourFilter()
+        contour.SetInputConnection(sample.GetOutputPort())
+        contour.SetValue(0, contourVal)
+
+        actor = vtkLogic.getActor(contour)
+        vtkLogic.addActor(actor)
         vtkLogic.vtkShow()
