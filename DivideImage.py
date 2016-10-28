@@ -126,6 +126,20 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         self.testBtn.connect('clicked(bool)', self.onTestBtn)
         self.testBtn2.connect('clicked(bool)', self.onTestBtn2)
 
+    def onReload(self):
+        ScriptedLoadableModuleWidget.onReload(self)
+
+        # DivideImageVTKLogic().clearActors()
+        renderer = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow().GetRenderers().GetFirstRenderer()
+        getActors = renderer.GetActors()
+        numActor = getActors.GetNumberOfItems()
+        logging.info("numActor in onReload: " + str(numActor))
+        if numActor > 10:
+            counter = numActor - 10
+            while counter > 0:
+                renderer.RemoveActor(getActors.GetLastActor())
+                counter -= 1
+
     def initVTK(self, isInsideRenWin=True):
         if isInsideRenWin:
             self.renderWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
@@ -421,6 +435,7 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         if isInsideRenWin:
             renderWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
             renderer = renderWin.GetRenderers().GetFirstRenderer()
+            numActorInit = renderer.GetActors().GetNumberOfItems()
         else:
             renderWin = vtk.vtkRenderWindow()
             renderWin.SetSize(640, 480)
@@ -436,6 +451,9 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         self.renderer = renderer
         self.iren = iren
 
+        self.numActorInit = numActorInit
+        self.numActor = numActorInit
+
         # # Depth peeling Parameters
         # self.maxPeels = 100
         # self.occlusion = 0.1
@@ -450,11 +468,20 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         # self.colorDiffuse = [247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]
         # self.sampleDims = [100] * 3
 
-    def __del__(self, isInsideRenWin=True):
+    def __del__(self):
         # if isInsideRenWin:
-        #     self.renderWin.RemoveRenderer(self.renderer)
-        #     self.renderWin.__init__()
-        pass
+        # renderer = self.renderer
+        #
+        # actorCollection = renderer.GetActors()
+        # numActorFinish = actorCollection.GetNumberOfItems()
+        # number = numActorFinish - self.numActorInit
+        # print number
+        # if number >= 0:
+        #     while number > 0:
+        #         renderer.RemoveActor(actorCollection.GetLastActor())
+        #
+        # self.renderer = renderer
+        self.clearActors()
 
     def getActor(self, vtkSource, color=[247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]):
         """
@@ -488,6 +515,22 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         # actor.GetProperty().SetOpacity(opacity)
 
         return actor
+
+    def addActor(self, actor):
+        if actor:
+            self.renderer.AddActor(actor)
+
+        self.numActor = self.renderer.GetActors().GetNumberOfItems()
+
+    def clearActors(self):
+        """
+        Clear all vtkActor but remain Slicer's outline and direction symbols
+        """
+        num = self.numActor - self.numActorInit
+        while num > 0:
+            self.renderer.RemoveActor(self.renderer.GetActors().GetLastActor())
+            num -= 1
+            self.numActor -= 1
 
     def vtkShow(self):
         """
@@ -1142,12 +1185,12 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         vtkLogic = DivideImageVTKLogic()
 
         cylinder = vtk.vtkCylinderSource()
-        cylinder.SetResolution(4)
+        cylinder.SetResolution(5)
         cylinder.SetHeight(100)
         cylinder.SetRadius(50)
 
         actor = vtkLogic.getActor(cylinder)
-        vtkLogic.renderer.AddActor(actor)
-        test = vtkLogic.renderer.GetActors()
-        print test
+        vtkLogic.addActor(actor)
+        numActor = vtkLogic.numActor
+        logging.info("numActor in test_VTKLogic: " + str(numActor))
         vtkLogic.vtkShow()
