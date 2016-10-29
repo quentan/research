@@ -19,6 +19,7 @@ import numpy as np
 
 import vtk
 from vtk.util import numpy_support
+from vtk.util import colors
 # from vtk.util import vtkImageImportFromArray
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleWidget
@@ -432,10 +433,12 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         self.numActorInit = numActorInit
         self.numActor = numActorInit
 
+        self.isInsideRenWin = isInsideRenWin
+
     def __del__(self):
         self.clearActors()
 
-    def getActor(self, vtkSource, color=[247.0 / 255.0, 150.0 / 255.0, 155.0 / 255.0]):
+    def getActor(self, vtkSource, color=colors.light_salmon):
         """
         @vtkSource  type 'vtkobject'
         @return     vtkActor
@@ -461,7 +464,7 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         actor.GetProperty().SetSpecular(0.3)
         actor.GetProperty().SetSpecularPower(20)
         actor.GetProperty().SetInterpolation(2)
-        # actor.GetProperty().SetRepresentation(2)
+        actor.GetProperty().SetRepresentation(2)
         # actor.GetProperty().SetEdgeVisibility(True)
         # actor.GetProperty().SetOpacity(opacity)
 
@@ -473,6 +476,63 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
 
         self.numActor = self.renderer.GetActors().GetNumberOfItems()
 
+    def addPoint(self, renderer, position=[0, 0, 0],
+                 color=colors.banana, radius=1):
+        """
+        Add ONE point to the given position
+        """
+        point = vtk.vtkSphereSource()
+        point.SetCenter(position)
+        point.SetRadius(radius)
+        point.SetPhiResolution(10)
+        point.SetThetaResolution(10)
+
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(point.GetOutputPort())
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.GetProperty().SetColor(color)
+
+        renderer.AddActor(actor)
+
+    def addText(self, renderer, position=[0, 0, 0], texts="Origin",
+                color=colors.olive, scale=5):
+        """
+        Create tet with X-Y-Z coordinate
+        """
+        text = vtk.vtkVectorText()
+        text.SetText(texts)
+
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(text.GetOutputPort())
+
+        actor = vtk.vtkFollower()
+        actor.SetCamera(renderer.GetActiveCamera())
+        actor.SetMapper(mapper)
+        actor.SetScale(scale, scale, scale)
+        actor.GetProperty().SetColor(color)
+        actor.AddPosition([sum(x) for x in zip(position, [0, -0.1, 0])])
+
+        renderer.AddActor(actor)
+
+    def addXYZCoord(self, renderer, position=[0, 0, 0], scale=100):
+        """
+        Add a X-Y-Z coordinate at the given point
+        """
+        axes = vtk.vtkAxes()
+        axes.SetOrigin(0, 0, 0)
+        axes.SetScaleFactor(scale)
+
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(axes.GetOutputPort())
+
+        actor = vtk.vtkActor()
+        # print actor.GetBounds()
+        actor.SetMapper(mapper)
+
+        renderer.AddActor(actor)
+
     def clearActors(self):
         """
         Clear all vtkActor but remain Slicer's outline and direction symbols
@@ -483,7 +543,11 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
             counter -= 1
             self.numActor -= 1
 
-    def vtkShow(self):
+    def vtkShow(self,
+                hasAnnotedCube=True,
+                hasXYZCoord=True,
+                hasOriginPoint=True,
+                hasOriginText=True):
         """
         Construction of VTK renderering workflow
         """
@@ -497,8 +561,90 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         iren.SetRenderWindow(renderWin)
         iren.Initialize()
 
+        #
+        # Start: Add an Annoted Cube with Arrows
+        # TODO: This cube cannot be cleared when reLoading
+        if hasAnnotedCube:
+            cube = vtk.vtkAnnotatedCubeActor()
+            cube.SetXPlusFaceText('R')
+            cube.SetXMinusFaceText('L')
+            cube.SetYPlusFaceText('A')
+            cube.SetYMinusFaceText('P')
+            cube.SetZPlusFaceText('I')
+            cube.SetZMinusFaceText('S')
+            cube.SetXFaceTextRotation(180)
+            cube.SetYFaceTextRotation(180)
+            cube.SetZFaceTextRotation(-90)
+            cube.SetFaceTextScale(0.65)
+            cube.GetCubeProperty().SetColor(0.5, 1.0, 1.0)
+            cube.GetTextEdgesProperty().SetLineWidth(1)
+            cube.GetTextEdgesProperty().SetColor(0.18, 0.28, 0.23)
+            cube.GetTextEdgesProperty().SetDiffuse(0)
+            cube.GetTextEdgesProperty().SetAmbient(1)
+
+            cube.GetXPlusFaceProperty().SetColor(1, 0, 0)
+            cube.GetXPlusFaceProperty().SetInterpolationToFlat()
+            cube.GetXMinusFaceProperty().SetColor(1, 0, 0)
+            cube.GetXMinusFaceProperty().SetInterpolationToFlat()
+
+            cube.GetYPlusFaceProperty().SetColor(0, 1, 0)
+            cube.GetYPlusFaceProperty().SetInterpolationToFlat()
+            cube.GetYMinusFaceProperty().SetColor(0, 1, 0)
+            cube.GetYMinusFaceProperty().SetInterpolationToFlat()
+
+            cube.GetZPlusFaceProperty().SetColor(0, 0, 1)
+            cube.GetZPlusFaceProperty().SetInterpolationToFlat()
+            cube.GetZMinusFaceProperty().SetColor(0, 0, 1)
+            cube.GetZMinusFaceProperty().SetInterpolationToFlat()
+
+            text_property = vtk.vtkTextProperty()
+            text_property.ItalicOn()
+            text_property.ShadowOn()
+            text_property.BoldOn()
+            text_property.SetFontFamilyToTimes()
+            text_property.SetColor(1, 0, 0)
+
+            text_property_2 = vtk.vtkTextProperty()
+            text_property_2.ShallowCopy(text_property)
+            text_property_2.SetColor(0, 1, 0)
+            text_property_3 = vtk.vtkTextProperty()
+            text_property_3.ShallowCopy(text_property)
+            text_property_3.SetColor(0, 0, 1)
+
+            axes = vtk.vtkAxesActor()
+            axes.SetShaftTypeToCylinder()
+            axes.SetXAxisLabelText('X')
+            axes.SetYAxisLabelText('Y')
+            axes.SetZAxisLabelText('Z')
+            axes.SetTotalLength(1.5, 1.5, 1.5)
+            axes.GetXAxisCaptionActor2D().SetCaptionTextProperty(text_property)
+            axes.GetYAxisCaptionActor2D().SetCaptionTextProperty(text_property_2)
+            axes.GetZAxisCaptionActor2D().SetCaptionTextProperty(text_property_3)
+
+            assembly = vtk.vtkPropAssembly()
+            assembly.AddPart(axes)
+            assembly.AddPart(cube)
+
+            marker = vtk.vtkOrientationMarkerWidget()
+            marker.SetOutlineColor(0.93, 0.57, 0.13)
+            marker.SetOrientationMarker(assembly)
+            marker.SetViewport(0.0, 0.0, 0.15, 0.3)
+            marker.SetInteractor(iren)
+            marker.EnabledOn()
+            marker.InteractiveOn()
+        # Finish: Add an Annoted Cube with Arrows
+        #
+        if hasXYZCoord:
+            self.addXYZCoord(renderer)
+
+        if hasOriginPoint:
+            self.addPoint(renderer)
+
+        if hasOriginText:
+            self.addText(renderer)
+
         renderer.ResetCamera()
-        # renderer.GetActiveCamera().Zoom(1.5)
+        renderer.SetActiveCamera(renderer.GetActiveCamera())
         renderWin.Render()
 
         iren.Start()
@@ -937,8 +1083,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test4_DivideImage()
         # self.test_EmptyVolume()
         # self.test_Vtk(False)
-        # self.test_VTKLogic()
-        self.test_implicitFunction()
+        self.test_VTKLogic()
+        # self.test_implicitFunction()
 
     def test1_DivideImage(self):
         """
@@ -1138,8 +1284,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         cylinder = vtk.vtkCylinderSource()
         cylinder.SetResolution(5)
-        # cylinder.SetHeight(100)
-        # cylinder.SetRadius(50)
+        cylinder.SetHeight(100)
+        cylinder.SetRadius(50)
 
         actor = vtkLogic.getActor(cylinder)
         vtkLogic.addActor(actor)
@@ -1148,6 +1294,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
     def test_implicitFunction(self):
 
+        bounds = [-100, 100, -100, 100, -100, 100]
         vtkLogic = DivideImageVTKLogic()
 
         coef = np.random.standard_normal(10)
@@ -1159,8 +1306,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         sample = vtk.vtkSampleFunction()
         sample.SetImplicitFunction(quadric)
         sample.ComputeNormalsOff()
-        # The bound of outline is this.
-        sample.SetModelBounds(-100, 100, -100, 100, -100, 100)
+        # Slicer's default bounds are: [-100, 100, -100, 100, -100, 100]
+        sample.SetModelBounds(bounds)
 
         contour = vtk.vtkContourFilter()
         contour.SetInputConnection(sample.GetOutputPort())
@@ -1168,4 +1315,5 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         actor = vtkLogic.getActor(contour)
         vtkLogic.addActor(actor)
+        logging.info("numActor in test_implicitFunction: " + str(vtkLogic.numActor))
         vtkLogic.vtkShow()
