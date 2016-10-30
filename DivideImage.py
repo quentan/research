@@ -1282,12 +1282,20 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # vtkLogic = DivideImageVTKLogic(isInsideRenWin=False)
         vtkLogic = DivideImageVTKLogic()
 
-        cylinder = vtk.vtkCylinderSource()
-        cylinder.SetResolution(5)
-        cylinder.SetHeight(100)
-        cylinder.SetRadius(50)
+        source = vtk.vtkSphereSource()
+        # source.SetResolution(5)
 
-        actor = vtkLogic.getActor(cylinder)
+        transform = vtk.vtkTransform()
+        transform.Scale(200, 100, 50)
+
+        transformFilter = vtk.vtkTransformFilter()
+        transformFilter.SetInputConnection(source.GetOutputPort())
+        transformFilter.SetTransform(transform)
+
+        # source.SetHeight(100)
+        # source.SetRadius(50)
+
+        actor = vtkLogic.getActor(transformFilter)
         vtkLogic.addActor(actor)
         logging.debug("numActor in test_VTKLogic: " + str(vtkLogic.numActor))
         vtkLogic.vtkShow()
