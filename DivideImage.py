@@ -10,6 +10,7 @@
 import os
 # import sys
 import time
+import urllib
 import qt
 import slicer
 import ctk
@@ -135,7 +136,7 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         renderer = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow().GetRenderers().GetFirstRenderer()
         getActors = renderer.GetActors()
         numActor = getActors.GetNumberOfItems()
-        logging.info("numActor in onReload: " + str(numActor))
+        logging.debug("numActor in onReload: " + str(numActor))
         if numActor > 10:  # renderer has 10 actors when start
             counter = numActor - 10
             while counter > 0:
@@ -544,10 +545,10 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
             self.numActor -= 1
 
     def vtkShow(self,
-                hasAnnotedCube=True,
                 hasXYZCoord=True,
                 hasOriginPoint=True,
-                hasOriginText=True):
+                hasOriginText=True,
+                hasAnnotedCube=False):
         """
         Construction of VTK renderering workflow
         """
@@ -563,7 +564,8 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
 
         #
         # Start: Add an Annoted Cube with Arrows
-        # TODO: This cube cannot be cleared when reLoading
+        # NOTE: Slicer has its own 'orientation cube', which is conflit with these code
+        # FIXME: This cube cannot be cleared when reLoading
         if hasAnnotedCube:
             cube = vtk.vtkAnnotatedCubeActor()
             cube.SetXPlusFaceText('R')
@@ -634,6 +636,7 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
             marker.InteractiveOn()
         # Finish: Add an Annoted Cube with Arrows
         #
+
         if hasXYZCoord:
             self.addXYZCoord(renderer)
 
@@ -644,7 +647,8 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
             self.addText(renderer)
 
         renderer.ResetCamera()
-        renderer.SetActiveCamera(renderer.GetActiveCamera())
+        # renderer.SetActiveCamera(renderer.GetActiveCamera())
+        renderer.GetActiveCamera()
         renderWin.Render()
 
         iren.Start()
@@ -1083,8 +1087,36 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test4_DivideImage()
         # self.test_EmptyVolume()
         # self.test_Vtk(False)
-        self.test_VTKLogic()
+        # self.test_VTKLogic()
         # self.test_implicitFunction()
+        self.test_implicitFitting()
+
+    def getDataFromURL(self):
+        """
+        Auxiliary function to download 'MR-head.nrrd' from url
+        @return     volumeNode
+        """
+
+        downloads = (
+            ("http://slicer.kitware.com/midas3/download/item/1697",
+             "MR-head.nrrd", slicer.util.loadVolume),
+        )
+
+        for url, name, loader in downloads:
+            # filePath = slicer.app.temporaryPath + '/' + name
+            filePath = os.path.join(slicer.app.temporaryPath, name)
+            if not os.path.exists(filePath) or os.stat(filePath).st_size == 0:
+                logging.info(
+                    "Requesting download %s from %s...\n" % (name, url))
+                urllib.urlretrieve(url, filePath)
+            if loader:
+                logging.info("Loading %s..." % (name,))
+                loader(filePath)
+        self.delayDisplay("Finished with download and loading")
+
+        volumeNode = slicer.util.getNode(pattern="MR-head")
+
+        return volumeNode
 
     def test1_DivideImage(self):
         """
@@ -1135,7 +1167,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logging.info("\nRun Test No. 3.\n")
 
         # first, get some data
-        import urllib
+        # import urllib
         downloads = (
             ("http://slicer.kitware.com/midas3/download/item/1697",
              "MR-head.nrrd", slicer.util.loadVolume),
@@ -1283,7 +1315,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         vtkLogic = DivideImageVTKLogic()
 
         source = vtk.vtkSphereSource()
-        # source.SetResolution(5)
+        source.SetPhiResolution(20)
+        source.SetThetaResolution(20)
 
         transform = vtk.vtkTransform()
         transform.Scale(200, 100, 50)
@@ -1325,3 +1358,74 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         vtkLogic.addActor(actor)
         logging.info("numActor in test_implicitFunction: " + str(vtkLogic.numActor))
         vtkLogic.vtkShow()
+
+    def test_implicitFitting(self):
+
+        contourVal = 0.0
+
+        logic = DivideImageLogic()
+
+        # filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
+        # slicer.util.loadVolume(filepath)
+        # volumeNode = slicer.util.getNode(pattern="MR-head")
+        # self.delayDisplay("Image loaded from: " + filepath)
+
+        volumeNode = self.getDataFromURL()
+
+        moduleWidget = slicer.modules.DivideImageWidget
+        moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
+
+        # Get subMatrices with given step
+        divideStep = [10] * 3
+        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(
+            volumeNode, divideStep)
+        numValidSubMatrices = np.sum(isValidSubMatrices)
+        logging.info(str(numValidSubMatrices) + '/' + str(len(subMatrices)) +
+                     " valid subMatrices generated")
+
+        # Find a valid subMatrix and fitting the points
+        idxValidMatrices = [i for i, x in enumerate(isValidSubMatrices) if x]
+        testValidMatrix = np.random.choice(idxValidMatrices)
+        # logging.info("This is subMatix " + str(testValidMatrix))
+        coords = logic.getCoords(subMatrices[testValidMatrix])
+        logging.info("Random subMatix " + str(testValidMatrix) + " has " +
+                     str(len(coords)) + " valid points")
+
+        vectorColume = logic.implicitFitting(coords)
+        logging.debug("Vector of colume:\n" + str(vectorColume))
+        fittingResult = logic.radialBasisFunc(vectorColume, coords)
+        logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
+        # print fittingResult.shape
+
+        imageData = logic.ndarray2vtkImageData(fittingResult)
+
+        dims = imageData.GetDimensions()
+        bounds = imageData.GetBounds()
+        logging.debug("Bounds of the sub image: " + str(bounds))
+        # spacing = imageData.GetSpacing()
+        # origin = imageData.GetOrigin()
+
+        #
+        # Start: VTK rendering
+        vtkLogic = DivideImageVTKLogic()
+        # FIXME: the outside rendering has problem.
+
+        implicitVolume = vtk.vtkImplicitVolume()
+        implicitVolume.SetVolume(imageData)
+
+        sample = vtk.vtkSampleFunction()
+        sample.SetImplicitFunction(implicitVolume)
+        sample.SetModelBounds(bounds)
+        sample.SetSampleDimensions(dims)
+        sample.ComputeNormalsOff()
+
+        contour = vtk.vtkContourFilter()
+        contour.SetInputConnection(sample.GetOutputPort())
+        contour.SetValue(0, contourVal)
+
+        actor = vtkLogic.getActor(contour)
+        vtkLogic.addActor(actor)
+        logging.debug("numActor in test_implicitFitting: " + str(vtkLogic.numActor))
+        vtkLogic.vtkShow()
+        # Finish: VTK rendering
+        #
