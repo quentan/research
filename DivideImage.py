@@ -766,7 +766,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     subMatrices.append(subMatrix)  # 1D list
 
                     isValid = self.isValidMatrix(subMatrix)
-                    isValidSubMatrices.append(isValid)  # 1D list
+                    isValidSubMatrices.append(isValid)  # 1D boolen list
 
         logging.debug("%d subMatrices generated" % len(subMatrices))
 
@@ -792,6 +792,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         """
         Determine the validation of subMatrix with a standard
         The standard could be complex
+        This function is for testing ALL subMatrices
         @param subMatrix    test array
         @param range        a grey value range
         @return boolen      `True` if contains at least 10% points in the range
@@ -813,7 +814,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         logging.debug("Number of valid point: " + str(num))  # SLOW!!
 
-        ratio = num * 1.0 / numItem
+        ratio = float(num) / numItem
         if ratio >= 0.1:
             return True
         else:
@@ -822,6 +823,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     def getCoords(self, subMatrix, range=[90, 100]):
         """
         Get the coords of valid point from a subMatrix
+        This function is for testing ONE subMatrix.
         NOTE: `implicitFitting` requires `ndarray`
         @param subMatrix    array containing valide points
         @param range        a grey value range
@@ -848,18 +850,19 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         # Method 3. About 4 times faster than Method 2
         coords = np.transpose(y.nonzero())  # type 'numpy.ndarray', 2-dimensional
-        print coords.shape
+        # print coords.shape
 
         # ratio = len(coords) / len(subMatrix)  # Wrong!
-        ratio = len(coords) * 1.0 / subMatrix.size  # NOTE: the division
-        logging.debug("ration: " + str(ratio))
+        ratio = float(len(coords)) / subMatrix.size  # NOTE: the division
+        logging.debug("ratio: " + str(ratio))
         if ratio >= 0.1:
             logging.debug("Valid subMatrix")
             # return np.asarray(coords)  # type 'numpy.ndarray'
             return coords
         else:
-            logging.info("Invalid subMatrix")
-            return False
+            # logging.info("Invalid subMatrix")
+            # return False
+            raise Exception("getCoords: Invalid subMatrix")
 
     def getImageInfo(self, imageData):
         """
@@ -1435,7 +1438,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # print subMatrices[testValidMatrix]
         coords = logic.getCoords(subMatrices[testValidMatrix])
         # coords = logic.getCoords(subMatrices[243])
-        print("coords: " + str(coords))
+        # print("coords: " + str(coords))
         logging.info("Random subMatix " + str(testValidMatrix) + " has " +
                      str(len(coords)) + " valid points")
 
