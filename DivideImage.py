@@ -16,7 +16,7 @@ import slicer
 import ctk
 import numpy as np
 # from multiprocessing import Pool
-# from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing.dummy import Pool as ThreadPool
 
 import vtk
 from vtk.util import numpy_support
@@ -165,7 +165,6 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         # unicodeStep = [unicode(i) for i in step]  # Wrong
         unicodeStep = str(step)[1: -1]  # trim the `[]` symbol
-        print unicodeStep
         self.divideStepWidget.coordinates = unicodeStep
 
         return True
@@ -497,13 +496,24 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
 
         self.renderer.AddActor(actor)
 
-    def addPoints(self, coords, color=colors.green, radius=0.1):
+    def addPoints(self, coords, color=colors.chartreuse, radius=0.3):
         """
         Add a set of points to vtkRenderer with a given coords array
         """
         numPoints = len(coords)
+        startTime = time.time()
         for i in range(numPoints):
-            self.addPoint(coords[i, :])
+            self.addPoint(coords[i, :], color, radius)
+        logging.debug(str(numPoints) + " points rendering takes time: " + str(time.time() - startTime))
+
+        # NOTE: the following is correct, but slower.
+        # threadNum = 4
+        # startTime = time.time()
+        # pool = ThreadPool(threadNum)
+        # pool.map(self.addPoint, coords)
+        # pool.close()
+        # pool.join()
+        # logging.info("Time taken: {}".format(time.time() - startTime))
 
     def addText(self, position=[0, 0, 0], texts="Origin",
                 color=colors.olive, scale=5):
@@ -688,6 +698,14 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             logging.error("Error: Failed to get ImageData!")
             return False
 
+    def setStep(self, step=0.1):
+        if step > 0:
+            self.step = step
+            return True
+        else:
+            logging.error("Step requires a positive value.")
+            return False
+
     def getNdarray(self, volumeNode):
 
         if self.hasImageData(volumeNode):
@@ -778,7 +796,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         @param range        a grey value range
         @return boolen      `True` if contains at least 10% points in the range
         """
-        length = len(subMatrix)
+        # numItem = len(subMatrix)  # Wrong!
+        numItem = subMatrix.size
         num = 0
 
         # for index, item in np.ndenumerate(subMatrix):
@@ -794,7 +813,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         logging.debug("Number of valid point: " + str(num))  # SLOW!!
 
-        if num / length >= 0.1:
+        ratio = num * 1.0 / numItem
+        if ratio >= 0.1:
             return True
         else:
             return False
@@ -816,22 +836,29 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         y1 = subMatrix >= range[0]
         y2 = subMatrix <= range[1]
-        y = y1 * y2
+        y = y1 * y2  # 3-dimentional matrix
+        # print y.shape
 
         # Method 2. About 100 times faster than Method 1
         # for coord, value in np.ndenumerate(y):
         #     if value:  # NOTE: CANNOT be `value is True`
         #         coords.append(coord)  # type 'list'
+        # coords = np.array(coords)  # list --> ndarray
+        # print coords.shape
 
         # Method 3. About 4 times faster than Method 2
-        coords = np.transpose(y.nonzero())  # type 'numpy.ndarray'
+        coords = np.transpose(y.nonzero())  # type 'numpy.ndarray', 2-dimensional
+        print coords.shape
 
-        if len(coords) / len(subMatrix) >= 0.1:
+        # ratio = len(coords) / len(subMatrix)  # Wrong!
+        ratio = len(coords) * 1.0 / subMatrix.size  # NOTE: the division
+        logging.debug("ration: " + str(ratio))
+        if ratio >= 0.1:
             logging.debug("Valid subMatrix")
             # return np.asarray(coords)  # type 'numpy.ndarray'
             return coords
         else:
-            logging.error("Invalid subMatrix")
+            logging.info("Invalid subMatrix")
             return False
 
     def getImageInfo(self, imageData):
@@ -894,6 +921,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         volumeNode.AddAndObserveDisplayNodeID(displayNode.GetID())
 
     def showVtkImageData(self, imageData):
+        # NOTE: not work!
         """
         Create a volume node from scratch
         See "https://www.slicer.org/slicerWiki/index.php/Documentation/4.5/Modules/Volumes"
@@ -988,12 +1016,13 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
     #
     # RBF Ellipsoid fitting
-    def radialBasisFunc(self, vector, data):
+    def radialBasisFunc(self, vector, data, step=0.1):
         """
         Radial Basis Function fitting
         @param vector   found fitting
         @param data     point_num*3 array, every row is a 3D point
-        @return ndarray an object in ndarray format
+        @return1        a ndarray object in ndarray format
+        @return2        spacing
         """
 
         w = vector[-10:]
@@ -1003,13 +1032,19 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         data_min = data.min(0)
         data_max = data.max(0)
 
-        step = 0.1
+        step = self.setStep()
         offset = 0.1
         step_x = np.arange(data_min[0] - offset, data_max[0] + offset, step)
         step_y = np.arange(data_min[1] - offset, data_max[1] + offset, step)
         step_z = np.arange(data_min[2] - offset, data_max[2] + offset, step)
 
         [x, y, z] = np.meshgrid(step_x, step_y, step_z)
+
+        dim_x, dim_y, dim_z = x.shape
+
+        spacing = [(data_max[0] - data_min[0]) / (dim_x - 1.0),
+                   (data_max[1] - data_min[1]) / (dim_y - 1.0),
+                   (data_max[2] - data_min[2]) / (dim_z - 1.0)]
 
         poly = w[0] * np.ones((x.shape)) + \
             2 * w[1] * x + 2 * w[2] * y + 2 * w[3] * z + \
@@ -1025,7 +1060,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         logging.debug("obj.shape: " + str(obj.shape))
         logging.debug("Type of obj: " + str(type(obj)))
 
-        return obj
+        return obj, spacing
 
     def ndarray2vtkImageData(self, numpyArray, castType=0,
                              spacing=[1, 1, 1], origin=[-1, -1, -1]):
@@ -1048,7 +1083,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         """
         # numpy array --> VTK array (vtkFloatArray)
         vtk_data_array = numpy_support.numpy_to_vtk(
-            num_array=numpyArray.transpose(2, 1, 0).ravel(),
+            num_array=numpyArray.transpose(2, 0, 1).ravel(),
             deep=True,
             array_type=vtk.VTK_FLOAT)
 
@@ -1395,17 +1430,22 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # Randomly pick up a valid subMatrix and fitting the points
         idxValidMatrices = [i for i, x in enumerate(isValidSubMatrices) if x]
         testValidMatrix = np.random.choice(idxValidMatrices)
+        # print testValidMatrix, type(testValidMatrix)
+        # testValidMatrix = 243
+        # print subMatrices[testValidMatrix]
         coords = logic.getCoords(subMatrices[testValidMatrix])
+        # coords = logic.getCoords(subMatrices[243])
+        print("coords: " + str(coords))
         logging.info("Random subMatix " + str(testValidMatrix) + " has " +
                      str(len(coords)) + " valid points")
 
-        vectorColume = logic.implicitFitting(coords)
-        logging.debug("Vector of colume:\n" + str(vectorColume))
-        fittingResult = logic.radialBasisFunc(vectorColume, coords)
+        vectorColumn = logic.implicitFitting(coords)
+        logging.debug("Vector of column:\n" + str(vectorColumn))
+        fittingResult, spacing = logic.radialBasisFunc(vectorColumn, coords)
         logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
         # print fittingResult.shape
 
-        imageData = logic.ndarray2vtkImageData(fittingResult)
+        imageData = logic.ndarray2vtkImageData(fittingResult, spacing=spacing)
 
         dims = imageData.GetDimensions()
         bounds = imageData.GetBounds()
