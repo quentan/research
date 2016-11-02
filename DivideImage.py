@@ -477,7 +477,7 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
 
         self.numActor = self.renderer.GetActors().GetNumberOfItems()
 
-    def addPoint(self, renderer, position=[0, 0, 0],
+    def addPoint(self, position=[0, 0, 0],
                  color=colors.banana, radius=1):
         """
         Add ONE point to the given position
@@ -495,9 +495,17 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         actor.SetMapper(mapper)
         actor.GetProperty().SetColor(color)
 
-        renderer.AddActor(actor)
+        self.renderer.AddActor(actor)
 
-    def addText(self, renderer, position=[0, 0, 0], texts="Origin",
+    def addPoints(self, coords, color=colors.green, radius=0.1):
+        """
+        Add a set of points to vtkRenderer with a given coords array
+        """
+        numPoints = len(coords)
+        for i in range(numPoints):
+            self.addPoint(coords[i, :])
+
+    def addText(self, position=[0, 0, 0], texts="Origin",
                 color=colors.olive, scale=5):
         """
         Create tet with X-Y-Z coordinate
@@ -509,21 +517,22 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         mapper.SetInputConnection(text.GetOutputPort())
 
         actor = vtk.vtkFollower()
-        actor.SetCamera(renderer.GetActiveCamera())
+        actor.SetCamera(self.renderer.GetActiveCamera())
         actor.SetMapper(mapper)
         actor.SetScale(scale, scale, scale)
         actor.GetProperty().SetColor(color)
         actor.AddPosition([sum(x) for x in zip(position, [0, -0.1, 0])])
 
-        renderer.AddActor(actor)
+        self.renderer.AddActor(actor)
 
-    def addXYZCoord(self, renderer, position=[0, 0, 0], scale=100):
+    def addXYZCoord(self, position=[0, 0, 0], scale=100):
         """
         Add a X-Y-Z coordinate at the given point
         """
         axes = vtk.vtkAxes()
         axes.SetOrigin(0, 0, 0)
         axes.SetScaleFactor(scale)
+        # axes.SetSymmetric(True)
 
         mapper = vtk.vtkPolyDataMapper()
         mapper.SetInputConnection(axes.GetOutputPort())
@@ -532,7 +541,7 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         # print actor.GetBounds()
         actor.SetMapper(mapper)
 
-        renderer.AddActor(actor)
+        self.renderer.AddActor(actor)
 
     def clearActors(self):
         """
@@ -638,13 +647,13 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
         #
 
         if hasXYZCoord:
-            self.addXYZCoord(renderer)
+            self.addXYZCoord()
 
         if hasOriginPoint:
-            self.addPoint(renderer)
+            self.addPoint()
 
         if hasOriginText:
-            self.addText(renderer)
+            self.addText()
 
         renderer.ResetCamera()
         # renderer.SetActiveCamera(renderer.GetActiveCamera())
@@ -1376,17 +1385,16 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
         # Get subMatrices with given step
-        divideStep = [10] * 3
+        divideStep = [10, 10, 10]
         subMatrices, isValidSubMatrices = logic.getValidSubMatrices(
             volumeNode, divideStep)
         numValidSubMatrices = np.sum(isValidSubMatrices)
         logging.info(str(numValidSubMatrices) + '/' + str(len(subMatrices)) +
                      " valid subMatrices generated")
 
-        # Find a valid subMatrix and fitting the points
+        # Randomly pick up a valid subMatrix and fitting the points
         idxValidMatrices = [i for i, x in enumerate(isValidSubMatrices) if x]
         testValidMatrix = np.random.choice(idxValidMatrices)
-        # logging.info("This is subMatix " + str(testValidMatrix))
         coords = logic.getCoords(subMatrices[testValidMatrix])
         logging.info("Random subMatix " + str(testValidMatrix) + " has " +
                      str(len(coords)) + " valid points")
@@ -1426,6 +1434,10 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         actor = vtkLogic.getActor(contour)
         vtkLogic.addActor(actor)
         logging.debug("numActor in test_implicitFitting: " + str(vtkLogic.numActor))
+
+        # Render the points
+        vtkLogic.addPoints(coords)
+
         vtkLogic.vtkShow()
         # Finish: VTK rendering
         #
