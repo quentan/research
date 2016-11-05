@@ -4,8 +4,8 @@
 3. Extract point coords from valid subMatix and fit them into implicit surface
 """
 
-# TODO: Visualise the fitting result
 # TODO: Refer `ContourWidget.py` to add some interactive operation
+# TODO: design a `MedicalMatrix` class
 
 import os
 # import sys
@@ -16,7 +16,7 @@ import slicer
 import ctk
 import numpy as np
 # from multiprocessing import Pool
-from multiprocessing.dummy import Pool as ThreadPool
+# from multiprocessing.dummy import Pool as ThreadPool
 
 import vtk
 from vtk.util import numpy_support
@@ -32,6 +32,32 @@ logging.getLogger('').handlers = []
 # logging.basicConfig(level=logging.DEBUG)
 logging.basicConfig(level=logging.INFO)
 # logging.basicConfig(level=logging.WARNING)
+
+
+#
+# class: `MedicalMatrix`
+#
+class MedicalMatrix(vtk.vtkImageData):
+    """
+    - The class `MedicalMatrix` should:
+      - designed for subMatrices
+      - keeps a copy of the original medical image part.
+      - or keeps a pointer to the original medical image part.
+      - keeps a same-size auxiliary 3D ndarray
+      - keeps data structure to find its 6-neighbours
+      - keeps its "origin point" in the original medical image
+      - keeps a flag: whether it is valid
+      - keeps a coordinates array, if it is valid
+      - be able to convert `vtkImageData` to `ndarray` and vice versa.
+      - ?? be able to slice the 3D matrix to a set of 2D arrays
+      - have basic matrix operations. (for 3D or 2D?)
+      - keeps a "density" parameter
+      - keeps both "1st, 2nd, 3rd..." and "[x, y, z]" orders
+      - ...
+    - Notice
+      - list or dict?
+    """
+    pass
 
 
 #
@@ -681,11 +707,13 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     def hasImageData(self, volumeNode):
 
         if not volumeNode:
-            logging.debug("hasImageData failed: no volume node")
-            return False
+            # logging.debug("hasImageData failed: no volume node")
+            # return False
+            raise UnboundLocalError("hasImageData failed: no volume node")
         if volumeNode.GetImageData() is None:
-            logging.debug("hasImageData failed: no image data in volume node")
-            return False
+            # logging.debug("hasImageData failed: no image data in volume node")
+            # return False
+            raise UnboundLocalError("hasImageData failed: no image data in volume node")
         return True
 
     def getImageData(self, volumeNode):
@@ -695,16 +723,22 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             logging.debug("vtkImageData of the volume: " + str(imageData))
             return imageData
         else:
-            logging.error("Error: Failed to get ImageData!")
-            return False
+            # logging.error("Error: Failed to get ImageData!")
+            # return False
+            raise IOError("Error: Failed to get ImageData!")
 
     def setStep(self, step=0.1):
-        if step > 0:
+        # if step > 0:
+        #     self.step = step
+        #     return True
+        # else:
+        #     logging.error("Step requires a positive value.")
+        #     return False
+        if step <= 0:
+            raise Exception("Step requires a positive value!", step)
+        else:
             self.step = step
             return True
-        else:
-            logging.error("Step requires a positive value.")
-            return False
 
     def getNdarray(self, volumeNode):
 
@@ -713,8 +747,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             logging.debug("Correspondent ndarray:\n" + str(ndarray))
             return ndarray
         else:
-            logging.error("Error: Failed to get ndarray!")
-            return False
+            # logging.error("Error: Failed to get ndarray!")
+            # return False
+            raise Exception("Failed to get ndarray!")
 
     def getSubMatrices(self, volumeNode, step=[40] * 3):
         """
@@ -740,6 +775,12 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         logging.debug("%d subMatrices generated" % len(subMatrices))
 
         return subMatrices
+
+    def GetSubImageData(self, volumeNode, step=[40] * 3):
+        """
+        Divide big vtkImageData into small ones.
+        """
+        bigImageData = self.getImageData(volumeNode)
 
     def getValidSubMatrices(self, volumeNode, step=[40] * 3):
         """
