@@ -735,7 +735,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         #     logging.error("Step requires a positive value.")
         #     return False
         if step <= 0:
-            raise Exception("Step requires a positive value!", step)
+            raise ValueError("Step requires a positive value!", step)
         else:
             self.step = step
             return True
@@ -761,6 +761,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         bigMatrix = self.getNdarray(volumeNode)
         shape = bigMatrix.shape
+        # print("shape: " + str(shape))
         subMatrices = []
 
         for i in range(0, shape[0], step[0]):
@@ -776,11 +777,32 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         return subMatrices
 
-    def GetSubImageData(self, volumeNode, step=[40] * 3):
+    def getSubImages(self, volumeNode, step=[40] * 3):
         """
         Divide big vtkImageData into small ones.
         """
         bigImageData = self.getImageData(volumeNode)
+        dims = bigImageData.GetDimensions()  # Inversed order with numpy's counterpart
+        # print("dims: " + str(dims))
+        # extent = bigImageData.GetExtent()
+
+        extract = vtk.vtkExtractVOI()
+        extract.SetInputData(bigImageData)
+        # extract.SetVOI(0, 29, 0, 29, 15, 15)
+        extract.SetSampleRate(1, 2, 3)
+
+        subImages = []
+        for i in range(0, dims[0], step[0]):
+            for j in range(0, dims[1], step[1]):
+                for k in range(0, dims[2], step[2]):
+                    extract.SetVOI(i, i + step[0] - 1,
+                                   j, j + step[1] - 1,
+                                   k, k + step[2] - 1)
+                    extract.Update()  # NOTE: this is indispensible!!
+                    subImage = extract.GetOutput()  # vtkImageData
+                    subImages.append(subImage)
+
+        return subImages
 
     def getValidSubMatrices(self, volumeNode, step=[40] * 3):
         """
@@ -1177,7 +1199,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test_Vtk(False)
         # self.test_VTKLogic()
         # self.test_implicitFunction()
-        self.test_implicitFitting()
+        # self.test_implicitFitting()
+        self.test_getSub()
+        # self.test_Extract()
 
     def getDataFromURL(self):
         """
@@ -1303,6 +1327,98 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # moduleWidget.test_getCoords()  # 0.0004s --> 0.0001s
 
         logging.info("Test 4 finished.")
+
+    def test_Extract(self):
+        # Quadric definition. This is a type of implicit function. Here the
+        # coefficients to the equations are set.
+
+        vtkLogic = DivideImageVTKLogic()
+
+        quadric = vtk.vtkQuadric()
+        quadric.SetCoefficients(.5, 1, .2, 0, .1, 0, 0, .2, 0, 0)
+
+        sample = vtk.vtkSampleFunction()
+        sample.SetSampleDimensions(30, 30, 30)
+        sample.SetImplicitFunction(quadric)
+        sample.ComputeNormalsOff()
+        sample.Update()
+
+        extract = vtk.vtkExtractVOI()
+        extract.SetInputConnection(sample.GetOutputPort())
+        extract.SetVOI(0, 29, 0, 29, 15, 20)
+        # extract.SetSampleRate(1, 2, 3)
+        extract.Update()  # NOTE: This is indispensible!
+        print extract.GetOutput()
+
+        transform = vtk.vtkTransform()
+        transform.Scale(100, 100, 10)
+
+        transformFilter = vtk.vtkTransformFilter()
+        transformFilter.SetInputConnection(extract.GetOutputPort())
+        transformFilter.SetTransform(transform)
+
+        # The image is contoured to produce contour lines. Thirteen contour values
+        # ranging from (0,1.2) inclusive are produced.
+        contours = vtk.vtkContourFilter()
+        contours.SetInputConnection(transformFilter.GetOutputPort())
+        contours.GenerateValues(13, 0.0, 1.2)
+
+        # The contour lines are mapped to the graphics library.
+        contMapper = vtk.vtkPolyDataMapper()
+        contMapper.SetInputConnection(contours.GetOutputPort())
+        contMapper.SetScalarRange(0.0, 1.2)
+
+        contActor = vtk.vtkActor()
+        contActor.SetMapper(contMapper)
+
+        # Create outline an outline of the sampled data.
+        outline = vtk.vtkOutlineFilter()
+        outline.SetInputConnection(transformFilter.GetOutputPort())
+
+        outlineMapper = vtk.vtkPolyDataMapper()
+        outlineMapper.SetInputConnection(outline.GetOutputPort())
+
+        outlineActor = vtk.vtkActor()
+        outlineActor.SetMapper(outlineMapper)
+        outlineActor.GetProperty().SetColor(0, 0, 0)
+
+        vtkLogic.addActor(contActor)
+        vtkLogic.addActor(outlineActor)
+        vtkLogic.vtkShow()
+
+    def test_getSub(self):
+        """
+        Test running time of getSubImages and getSubMatrices
+        """
+        filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
+        slicer.util.loadVolume(filepath)
+        volumeNode = slicer.util.getNode(pattern="MR-head")
+        self.delayDisplay("Image loaded from: " + filepath)
+
+        moduleWidget = slicer.modules.DivideImageWidget
+        moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
+
+        logic = DivideImageLogic()
+        divideStep = [10, 10, 10]
+        i = 500
+
+        #
+        # Test `getSubMatrices`
+        startTime = time.time()
+        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        logging.info("--- getSubMatrices uses %s seconds ---" %
+                     (time.time() - startTime))
+        print("length of subMatrices: " + str(len(subMatrices)))
+        print(subMatrices[i].shape)
+
+        #
+        # Test `getSubImages`
+        startTime = time.time()
+        subImages = logic.getSubImages(volumeNode, divideStep)
+        logging.info("--- getSubImages uses %s seconds ---" %
+                     (time.time() - startTime))
+        print("length of subImages: " + str(len(subImages)))
+        print(subImages[i])
 
     def test_EmptyVolume(self):
         """

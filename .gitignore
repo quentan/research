@@ -5,6 +5,9 @@ __pycache__/
 # C extensions
 *.so
 
+# test scripts
+test_*
+
 # Distribution / packaging
 .Python
 env/
