@@ -763,10 +763,18 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         shape = bigMatrix.shape
         # print("shape: " + str(shape))
         subMatrices = []
-
         for i in range(0, shape[0], step[0]):
+            if shape[0] - i < step[0]:
+                step[0] = shape[0] - i
             for j in range(0, shape[1], step[1]):
+                if shape[1] - j < step[1]:
+                    step[1] = shape[1] - j
                 for k in range(0, shape[2], step[2]):
+                    if shape[2] - k < step[2]:
+                        step[2] = shape[2] - k
+        # for i in range(0, shape[0], step[0]):
+        #     for j in range(0, shape[1], step[1]):
+        #         for k in range(0, shape[2], step[2]):
                     subMatrix = bigMatrix[i:i + step[0],
                                           j:j + step[1],
                                           k:k + step[2]
@@ -780,21 +788,30 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     def getSubImages(self, volumeNode, step=[40] * 3):
         """
         Divide big vtkImageData into small ones.
+        Note: the order is opposite with its NumPy counterpart
         """
         bigImageData = self.getImageData(volumeNode)
         dims = bigImageData.GetDimensions()  # Inversed order with numpy's counterpart
+        shape = dims[::-1]  # Note the order is reversed against NumPy's order
+        step = step[::-1]
         # print("dims: " + str(dims))
         # extent = bigImageData.GetExtent()
 
         extract = vtk.vtkExtractVOI()
         extract.SetInputData(bigImageData)
         # extract.SetVOI(0, 29, 0, 29, 15, 15)
-        extract.SetSampleRate(1, 2, 3)
+        extract.SetSampleRate(1, 1, 1)
 
         subImages = []
-        for i in range(0, dims[0], step[0]):
-            for j in range(0, dims[1], step[1]):
-                for k in range(0, dims[2], step[2]):
+        for i in range(0, shape[0], step[0]):
+            if shape[0] - i < step[0]:
+                step[0] = shape[0] - i
+            for j in range(0, shape[1], step[1]):
+                if shape[1] - j < step[1]:
+                    step[1] = shape[1] - j
+                for k in range(0, shape[2], step[2]):
+                    if shape[2] - k < step[2]:
+                        step[2] = shape[2] - k
                     extract.SetVOI(i, i + step[0] - 1,
                                    j, j + step[1] - 1,
                                    k, k + step[2] - 1)
@@ -1199,8 +1216,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test_Vtk(False)
         # self.test_VTKLogic()
         # self.test_implicitFunction()
-        # self.test_implicitFitting()
-        self.test_getSub()
+        self.test_implicitFitting()
+        # self.test_getSub()
         # self.test_Extract()
 
     def getDataFromURL(self):
@@ -1332,7 +1349,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # Quadric definition. This is a type of implicit function. Here the
         # coefficients to the equations are set.
 
-        vtkLogic = DivideImageVTKLogic()
+        vtkLogic = DivideImageVTKLogic(False)
 
         quadric = vtk.vtkQuadric()
         quadric.SetCoefficients(.5, 1, .2, 0, .1, 0, 0, .2, 0, 0)
@@ -1400,16 +1417,16 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         logic = DivideImageLogic()
         divideStep = [10, 10, 10]
-        i = 500
 
         #
         # Test `getSubMatrices`
         startTime = time.time()
         subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        i = np.random.randint(0, len(subMatrices))
         logging.info("--- getSubMatrices uses %s seconds ---" %
                      (time.time() - startTime))
         print("length of subMatrices: " + str(len(subMatrices)))
-        print(subMatrices[i].shape)
+        print("subMatrix No." + str(i) + ": " + str(subMatrices[i].shape))
 
         #
         # Test `getSubImages`
@@ -1418,7 +1435,14 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logging.info("--- getSubImages uses %s seconds ---" %
                      (time.time() - startTime))
         print("length of subImages: " + str(len(subImages)))
-        print(subImages[i])
+        print("subImage No." + str(i) + ": " + str(subImages[i].GetDimensions()))
+
+        # a = vtk.util.numpy_support.vtk_to_numpy(i.GetPointData().GetScalars()).reshape(shape)
+        # i = 7000
+        # while i < len(subImages):
+        #     print("subMatrices No. " + str(i) + ": " + str(subMatrices[i].shape))
+        #     print("subImages No. " + str(i) + ": " + str(subImages[i].GetDimensions()))
+        #     i += 1
 
     def test_EmptyVolume(self):
         """
@@ -1631,8 +1655,19 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         contour.SetInputConnection(sample.GetOutputPort())
         contour.SetValue(0, contourVal)
 
+        outline = vtk.vtkOutlineFilter()
+        outline.SetInputConnection(contour.GetOutputPort())
+
+        outlineMapper = vtk.vtkPolyDataMapper()
+        outlineMapper.SetInputConnection(outline.GetOutputPort())
+
+        outlineActor = vtk.vtkActor()
+        outlineActor.SetMapper(outlineMapper)
+        outlineActor.GetProperty().SetColor(0, 0, 0)
+
         actor = vtkLogic.getActor(contour)
         vtkLogic.addActor(actor)
+        vtkLogic.addActor(outlineActor)
         logging.debug("numActor in test_implicitFitting: " + str(vtkLogic.numActor))
 
         # Render the points
