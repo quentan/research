@@ -763,23 +763,28 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         shape = bigMatrix.shape
         # print("shape: " + str(shape))
         subMatrices = []
-        for i in range(0, shape[0], step[0]):
-            if shape[0] - i < step[0]:
-                step[0] = shape[0] - i
-            for j in range(0, shape[1], step[1]):
-                if shape[1] - j < step[1]:
-                    step[1] = shape[1] - j
-                for k in range(0, shape[2], step[2]):
-                    if shape[2] - k < step[2]:
-                        step[2] = shape[2] - k
         # for i in range(0, shape[0], step[0]):
         #     for j in range(0, shape[1], step[1]):
         #         for k in range(0, shape[2], step[2]):
+        #             if shape[0] - i < step[0]:
+        #                 step[0] = shape[0] - i
+        #             if shape[1] - j < step[1]:
+        #                 step[1] = shape[1] - j
+        #             if shape[2] - k < step[2]:
+        #                 step[2] = shape[2] - k
+        for i in range(0, shape[0], step[0]):
+            for j in range(0, shape[1], step[1]):
+                for k in range(0, shape[2], step[2]):
                     subMatrix = bigMatrix[i:i + step[0],
                                           j:j + step[1],
                                           k:k + step[2]
                                           ]
                     subMatrices.append(subMatrix)
+                    # Record the index of subMatrixm (VOI)
+                    x, y, z = subMatrix.shape
+                    minX, maxX = i, i + x
+                    minY, maxY = j, j + y
+                    minZ, maxZ = k, k + z
 
         logging.debug("%d subMatrices generated" % len(subMatrices))
 
@@ -1216,8 +1221,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test_Vtk(False)
         # self.test_VTKLogic()
         # self.test_implicitFunction()
-        self.test_implicitFitting()
-        # self.test_getSub()
+        # self.test_implicitFitting()
+        self.test_getSub()
         # self.test_Extract()
 
     def getDataFromURL(self):
@@ -1429,13 +1434,21 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         print("subMatrix No." + str(i) + ": " + str(subMatrices[i].shape))
 
         #
+        # The shape of every subMatrix
+        i = 0
+        lengthSubMatrices = len(subMatrices)
+        while i < lengthSubMatrices:
+            print("shape of subMatrix " + str(i) + ": " + str(subMatrices[i].shape))
+            i += 10
+
+        #
         # Test `getSubImages`
-        startTime = time.time()
-        subImages = logic.getSubImages(volumeNode, divideStep)
-        logging.info("--- getSubImages uses %s seconds ---" %
-                     (time.time() - startTime))
-        print("length of subImages: " + str(len(subImages)))
-        print("subImage No." + str(i) + ": " + str(subImages[i].GetDimensions()))
+        # startTime = time.time()
+        # subImages = logic.getSubImages(volumeNode, divideStep)
+        # logging.info("--- getSubImages uses %s seconds ---" %
+        #              (time.time() - startTime))
+        # print("length of subImages: " + str(len(subImages)))
+        # print("subImage No." + str(i) + ": " + str(subImages[i].GetDimensions()))
 
         # a = vtk.util.numpy_support.vtk_to_numpy(i.GetPointData().GetScalars()).reshape(shape)
         # i = 7000
