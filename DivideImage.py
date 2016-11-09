@@ -740,16 +740,28 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             self.step = step
             return True
 
-    def getNdarray(self, volumeNode):
+    def getNdarray(self, node):
 
-        if self.hasImageData(volumeNode):
-            ndarray = slicer.util.array(volumeNode.GetID())
-            logging.debug("Correspondent ndarray:\n" + str(ndarray))
-            return ndarray
+        # if self.hasImageData(volumeNode):
+        #     ndarray = slicer.util.array(volumeNode.GetID())
+        #     logging.debug("Correspondent ndarray:\n" + str(ndarray))
+        #     return ndarray
+        # else:
+        #     # logging.error("Error: Failed to get ndarray!")
+        #     # return False
+        #     raise Exception("Failed to get ndarray!")
+
+        if node.GetClassName() in ('vtkMRMLScalarVolumeNode',
+                                   'vtkMRMLLabelMapVolumeNode'):  # scalarTypes
+            ndarray = slicer.util.array(node.GetID())
+        elif node.GetClassName() == 'vtkImageData':
+            shape = list(node.GetDimensions())
+            shape.reverse()
+            ndarray = vtk.util.numpy_support.vtk_to_numpy(node.GetPointData().GetScalars()).reshape(shape)
         else:
-            # logging.error("Error: Failed to get ndarray!")
-            # return False
-            raise Exception("Failed to get ndarray!")
+            raise TypeError("The node cannot be converted to NumPy array!")
+
+        return ndarray
 
     def getSubMatrices(self, volumeNode, step=[40] * 3):
         """
@@ -811,28 +823,63 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     VOIs.append(np.asarray(VOI).T)
                     indices.append(np.asarray(index).T)
 
-        return np.array(VOIs), np.array(indices) - 1  # index starts at `0`
+        return np.asarray(VOIs), np.asarray(indices) - 1  # index starts at `0`
 
-    def getSubMatrix(self, bigMatrix, VOI):
+    def getSubMatrix(self, node, VOI=[0, 10] * 3):
         """
         Extract a subMatrix from given matrix and VOI
-        @param1     bigMatrix: a 3D ndarray
-        @param2     VOI: a 3D region
+        @param1     node: 3D `ndarray`, or `volumeNode`, or `vtkImageData`
+        @param2     VOI: a 3D region: [x1, x2, y1, y2, z1, z2]
         @return     a small 3D ndarray
         """
+        if isinstance(node, np.ndarray):
+            bigMatrix = node
+        elif node.GetClassName() in ('vtkMRMLScalarVolumeNode',  # scalarTypes
+                                     'vtkMRMLLabelMapVolumeNode',  # scalarTypes
+                                     'vtkImageData'):
+            bigMatrix = self.getNdarray(node)
+        else:
+            raise TypeError("The node cannot be converted to NumPy array!")
+
         subMatrix = bigMatrix[VOI[0]:VOI[1],
                               VOI[2]:VOI[3],
                               VOI[4]:VOI[5]]
         return subMatrix
 
-    def getSubImage(self, bigImageData, VOI):
+    def getSubMatrixFromIndex(self, node, index=[0] * 3):
+        """
+        Extract a subMatrix for its order number
+        The number should be valid
+        """
+        if isinstance(node, np.ndarray):
+            bigMatrix = node
+        elif node.GetClassName() in ('vtkMRMLScalarVolumeNode',
+                                     'vtkMRMLLabelMapVolumeNode'):  # scalarTypes
+            bigMatrix = self.getNdarray(node)
+        elif node.GetClassName() == 'vtkImageData':
+            shape = list(node.GetImageData().GetDimensions())
+            shape.reverse()
+            bigMatrix = vtk.util.numpy_support.vtk_to_numpy(node.GetPointData().GetScalars()).reshape(shape)
+        else:
+            raise TypeError("The node cannot be converted to NumPy array!")
+
+        pass  # not finished yet
+
+    def getSubImage(self, bigImageData, VOI=[0, 10] * 3):
         """
         Extract a subImageData from given `vtkImageData` and VOI
+        NOTE! The order has be converted to NumPy's order!!
         @param1     bigImageData: a big `vtkImageData`
-        @param2
+        @param2     VOI: __in NumPy's order!__
         @return     a small `vtkImageData`
         """
-        VOI = np.asarray(VOI) + np.asarray([0, -1] * 3)  # index of vtk is different
+        t = np.asarray(VOI) + np.asarray([0, -1] * 3)  # index of vtk is different
+        VOI = np.asarray([t[4], t[5], t[2], t[3], t[0], t[1]])  # swap to adpot to NumPy
+        logging.debug("VOI[1::2]: " + str(VOI[1::2]))
+
+        dims = bigImageData.GetDimensions()
+        if np.sum(VOI[1::2] <= dims) != 3:  # overflow
+            raise Exception("VOI overflow!")
 
         extract = vtk.vtkExtractVOI()
         extract.SetInputData(bigImageData)
@@ -1473,11 +1520,30 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
         logic = DivideImageLogic()
-        divideStep = [10, 10, 10]
+        divideStep = [22, 33, 44]
 
         VOIs, indices = logic.getIndexVOI(volumeNode, divideStep)
-        print VOIs
-        print indices
+        # print VOIs.shape
+        # print indices.shape
+
+        bigMatrix = logic.getNdarray(volumeNode)
+        bigImageData = logic.getImageData(volumeNode)
+        print("bigMatrix.shape: " + str(bigMatrix.shape))
+        print("bigImageData.dim: " + str(bigImageData.GetDimensions()))
+
+        rand = np.random.randint(0, len(VOIs))
+        subMatrix = logic.getSubMatrix(bigMatrix, VOIs[rand])
+        subImage = logic.getSubImage(bigImageData, VOIs[rand])
+        # print subImage
+        subMatrixFromImage = logic.getNdarray(subImage)
+
+        print rand
+        print subMatrix.shape
+        print subImage.GetDimensions()
+        # print subMatrixFromImage.shape
+
+        print np.array_equal(subMatrix, subMatrixFromImage)
+
         #
         # Test `getSubMatrices`
         # startTime = time.time()
