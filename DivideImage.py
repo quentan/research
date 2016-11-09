@@ -763,15 +763,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         shape = bigMatrix.shape
         # print("shape: " + str(shape))
         subMatrices = []
-        # for i in range(0, shape[0], step[0]):
-        #     for j in range(0, shape[1], step[1]):
-        #         for k in range(0, shape[2], step[2]):
-        #             if shape[0] - i < step[0]:
-        #                 step[0] = shape[0] - i
-        #             if shape[1] - j < step[1]:
-        #                 step[1] = shape[1] - j
-        #             if shape[2] - k < step[2]:
-        #                 step[2] = shape[2] - k
         for i in range(0, shape[0], step[0]):
             for j in range(0, shape[1], step[1]):
                 for k in range(0, shape[2], step[2]):
@@ -782,13 +773,74 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     subMatrices.append(subMatrix)
                     # Record the index of subMatrixm (VOI)
                     x, y, z = subMatrix.shape
-                    minX, maxX = i, i + x
-                    minY, maxY = j, j + y
-                    minZ, maxZ = k, k + z
 
         logging.debug("%d subMatrices generated" % len(subMatrices))
 
         return subMatrices
+
+    def getIndexVOI(self, volumeNode, step=[40] * 3):
+        """
+        Retrieve index of VOI and index of [i, j, k]
+        1. NumPy's index is very fast
+        2. Sync the `vtkImageData` and its NumPy array counterpart
+        @return1    VOIs: `extend` of every subMatrix, NumPy's order
+        @return2    indices: [i, j, k] order of every subMatrix
+        """
+        bigMatrix = self.getNdarray(volumeNode)
+        shape = bigMatrix.shape
+        VOIs = []
+        indices = []
+
+        ii = 0  # index of subMatrix
+        for i in range(0, shape[0], step[0]):
+            ii += 1
+            jj = 0
+            for j in range(0, shape[1], step[1]):
+                jj += 1
+                kk = 0
+                for k in range(0, shape[2], step[2]):
+                    kk += 1
+                    subMatrix = bigMatrix[i:i + step[0],
+                                          j:j + step[1],
+                                          k:k + step[2]
+                                          ]
+                    # Record the index of subMatrix (VOI extent)
+                    x, y, z = subMatrix.shape
+                    VOI = [i, i + x, j, j + y, k, k + z]
+                    index = [ii, jj, kk]
+                    VOIs.append(np.asarray(VOI).T)
+                    indices.append(np.asarray(index).T)
+
+        return np.array(VOIs), np.array(indices) - 1  # index starts at `0`
+
+    def getSubMatrix(self, bigMatrix, VOI):
+        """
+        Extract a subMatrix from given matrix and VOI
+        @param1     bigMatrix: a 3D ndarray
+        @param2     VOI: a 3D region
+        @return     a small 3D ndarray
+        """
+        subMatrix = bigMatrix[VOI[0]:VOI[1],
+                              VOI[2]:VOI[3],
+                              VOI[4]:VOI[5]]
+        return subMatrix
+
+    def getSubImage(self, bigImageData, VOI):
+        """
+        Extract a subImageData from given `vtkImageData` and VOI
+        @param1     bigImageData: a big `vtkImageData`
+        @param2
+        @return     a small `vtkImageData`
+        """
+        VOI = np.asarray(VOI) + np.asarray([0, -1] * 3)  # index of vtk is different
+
+        extract = vtk.vtkExtractVOI()
+        extract.SetInputData(bigImageData)
+        extract.SetVOI(VOI)
+        extract.Update()
+        subImageData = extract.GetOutput()
+
+        return subImageData
 
     def getSubImages(self, volumeNode, step=[40] * 3):
         """
@@ -1423,23 +1475,26 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logic = DivideImageLogic()
         divideStep = [10, 10, 10]
 
+        VOIs, indices = logic.getIndexVOI(volumeNode, divideStep)
+        print VOIs
+        print indices
         #
         # Test `getSubMatrices`
-        startTime = time.time()
-        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
-        i = np.random.randint(0, len(subMatrices))
-        logging.info("--- getSubMatrices uses %s seconds ---" %
-                     (time.time() - startTime))
-        print("length of subMatrices: " + str(len(subMatrices)))
-        print("subMatrix No." + str(i) + ": " + str(subMatrices[i].shape))
-
+        # startTime = time.time()
+        # subMatrices = logic.getSubMatrices(volumeNode, divideStep)
+        # i = np.random.randint(0, len(subMatrices))
+        # logging.info("--- getSubMatrices uses %s seconds ---" %
+        #              (time.time() - startTime))
+        # print("length of subMatrices: " + str(len(subMatrices)))
+        # print("subMatrix No." + str(i) + ": " + str(subMatrices[i].shape))
         #
-        # The shape of every subMatrix
-        i = 0
-        lengthSubMatrices = len(subMatrices)
-        while i < lengthSubMatrices:
-            print("shape of subMatrix " + str(i) + ": " + str(subMatrices[i].shape))
-            i += 10
+        # #
+        # # The shape of every subMatrix
+        # i = 0
+        # lengthSubMatrices = len(subMatrices)
+        # while i < lengthSubMatrices:
+        #     print("shape of subMatrix " + str(i) + ": " + str(subMatrices[i].shape))
+        #     i += 10
 
         #
         # Test `getSubImages`
