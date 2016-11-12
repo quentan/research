@@ -857,6 +857,41 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         # return np.asarray(VOIs), np.asarray(indices) - 1  # index starts at `0`
         return indexVOIs
 
+    # TODO: put all useful information together for valide subImage
+    def getSubImageInfo(self, volumeNode, step=[30] * 3):
+        """
+        Put useful info together for valid subImage, including:
+        1. Validation of this subImage. If `False` all the followings are `None`
+        2. Normal `vtkImageData` info
+        3. Info of its `ndarray` counterpart
+        4. Serial No., index and VOI
+        """
+        subImageInfo = objdict()
+        indexVOIs = self.getIndexVOI(volumeNode, step)
+        imageInfo = self.getImageInfo(volumeNode)
+        # Get a list containing valid of all subMatrices
+        # Put `vtkImageData` info to the dict
+        counter = 0
+        for i in indexVOIs:
+            isValid = self.isValidMatrix(i.VOI)
+            subImageInfo.sn = counter
+            subImageInfo.index = i.index
+            subImageInfo.voi = i.VOI
+            subImageInfo.extent = i.VOI
+            subImageInfo.origin = i.VOI[::2]
+
+
+        # origin = imageData.GetOrigin()
+        # spacing = imageData.GetSpacing()
+        # extent = imageData.GetExtent()
+        # centre = imageData.GetCenter()
+        # dimensions = imageData.GetDimensions()
+        # number = imageData.GetNumberOfPoints()
+        # valueMax = imageData.GetScalarTypeMax()
+        # valueMin = imageData.GetScalarTypeMin()
+        # length = imageData.GetLength()  # what is it?
+        # dataType = imageData.GetScalarTypeAsString()
+
     def getSubMatrix(self, node, VOI=[0, 10] * 3):
         """
         Extract a subMatrix from given matrix and VOI
@@ -878,25 +913,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                               VOI[4]:VOI[5]]
         return subMatrix
 
-    def getSubMatrixFromIndex(self, node, index=[0] * 3):
-        """
-        Extract a subMatrix for its order number
-        The number should be valid
-        """
-        if isinstance(node, np.ndarray):
-            bigMatrix = node
-        elif node.GetClassName() in ('vtkMRMLScalarVolumeNode',
-                                     'vtkMRMLLabelMapVolumeNode'):  # scalarTypes
-            bigMatrix = self.getNdarray(node)
-        elif node.GetClassName() == 'vtkImageData':
-            shape = list(node.GetImageData().GetDimensions())
-            shape.reverse()
-            bigMatrix = vtk.util.numpy_support.vtk_to_numpy(node.GetPointData().GetScalars()).reshape(shape)
-        else:
-            raise TypeError("The node cannot be converted to NumPy array!")
-
-        pass  # not finished yet
-
     def getSubImage(self, bigImageData, VOI=[0, 10] * 3):
         """
         Extract a subImageData from given `vtkImageData` and VOI
@@ -913,6 +929,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         if np.sum(VOI[1::2] <= dims) != 3:  # overflow
             raise Exception("VOI overflow!")
 
+        if VOI[0] >= VOI[1] or VOI[2] >= VOI[3] or VOI[4] >= VOI[5]:
+            raise Exception("VOI overflow!")
+
         extract = vtk.vtkExtractVOI()
         extract.SetInputData(bigImageData)
         extract.SetVOI(VOI)
@@ -923,6 +942,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
     def getSubImages(self, volumeNode, step=[40] * 3):
         """
+        NOTE: this method should be depricated!
         Divide big vtkImageData into small ones.
         Note: the order is opposite with its NumPy counterpart
         """
@@ -987,6 +1007,22 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         logging.debug("%d subMatrices generated" % len(subMatrices))
 
         return subMatrices, isValidSubMatrices
+
+    def markValidSubMatrices(self, node, rule):
+        """
+        Mark the validation of a subMatrix with a given rule
+        @param      rule: a METHOD to give specific rule
+        """
+        if isinstance(node, np.ndarray):
+            subMatrix = node
+        elif node.GetClassName() in ('vtkMRMLScalarVolumeNode',  # scalarTypes
+                                     'vtkMRMLLabelMapVolumeNode',  # scalarTypes
+                                     'vtkImageData'):
+            subMatrix = self.getNdarray(node)
+        else:
+            raise TypeError("The node cannot be converted to NumPy array!")
+
+        for item in
 
     def chopSubMatrix(self, subMatrix, value=0):
         """
@@ -1087,7 +1123,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         @param imageData    vtkImageData var
         @return dict        a dict containing these information
         """
-        imageInfo = {}
+        imageInfo = objdict()
         origin = imageData.GetOrigin()
         spacing = imageData.GetSpacing()
         extent = imageData.GetExtent()
@@ -1257,7 +1293,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         step_y = np.arange(data_min[1] - offset, data_max[1] + offset, step)
         step_z = np.arange(data_min[2] - offset, data_max[2] + offset, step)
 
-        [x, y, z] = np.meshgrid(step_x, step_y, step_z)
+        x, y, z = np.meshgrid(step_x, step_y, step_z)
 
         dim_x, dim_y, dim_z = x.shape
 
