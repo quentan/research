@@ -8,6 +8,7 @@
 # TODO: design a `MedicalMatrix` class
 
 import os
+import copy
 # import sys
 import time
 import urllib
@@ -32,6 +33,33 @@ logging.getLogger('').handlers = []
 # logging.basicConfig(level=logging.DEBUG)
 logging.basicConfig(level=logging.INFO)
 # logging.basicConfig(level=logging.WARNING)
+
+
+#
+# A subclass of `dict` to make dict behave like class
+#
+class objdict(dict):
+    """
+    Example:
+    >>> d = {'a': 1, 'b': 2}
+    >>> o = objdict(d)
+    >>> o.a
+    1
+    """
+    def __getattr__(self, name):
+        if name in self:
+            return self[name]
+        else:
+            raise AttributeError("No such attribute: " + name)
+
+    def __setattr__(self, name, value):
+        self[name] = value
+
+    def __delattr__(self, name):
+        if name in self:
+            del self[name]
+        else:
+            raise AttributeError("No such attribute: " + name)
 
 
 #
@@ -754,7 +782,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         if node.GetClassName() in ('vtkMRMLScalarVolumeNode',
                                    'vtkMRMLLabelMapVolumeNode'):  # scalarTypes
             ndarray = slicer.util.array(node.GetID())
-        elif node.GetClassName() == 'vtkImageData':
+        elif node.GetClassName() == 'vtkImageData':  # not `is`
             shape = list(node.GetDimensions())
             shape.reverse()
             ndarray = vtk.util.numpy_support.vtk_to_numpy(node.GetPointData().GetScalars()).reshape(shape)
@@ -793,15 +821,16 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     def getIndexVOI(self, volumeNode, step=[40] * 3):
         """
         Retrieve index of VOI and index of [i, j, k]
-        1. NumPy's index is very fast
+        1. NumPy's indexing is very fast
         2. Sync the `vtkImageData` and its NumPy array counterpart
         @return1    VOIs: `extend` of every subMatrix, NumPy's order
         @return2    indices: [i, j, k] order of every subMatrix
         """
         bigMatrix = self.getNdarray(volumeNode)
         shape = bigMatrix.shape
-        VOIs = []
-        indices = []
+
+        indexVOI = objdict()  # empty `objdict` object
+        indexVOIs = []  # a list containing all `objdict` objects
 
         ii = 0  # index of subMatrix
         for i in range(0, shape[0], step[0]):
@@ -820,10 +849,13 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     x, y, z = subMatrix.shape
                     VOI = [i, i + x, j, j + y, k, k + z]
                     index = [ii, jj, kk]
-                    VOIs.append(np.asarray(VOI).T)
-                    indices.append(np.asarray(index).T)
+                    indexVOI.VOI = np.asarray(VOI).T  # n*6 matrix
+                    indexVOI.index = np.asarray(index).T - 1  # n*3 matrix
+                    indexVOIs.append(copy.copy(indexVOI))  # shallow copy
+                    # indexVOIs.append(copy.deepcopy(indexVOI))  # deep copy
 
-        return np.asarray(VOIs), np.asarray(indices) - 1  # index starts at `0`
+        # return np.asarray(VOIs), np.asarray(indices) - 1  # index starts at `0`
+        return indexVOIs
 
     def getSubMatrix(self, node, VOI=[0, 10] * 3):
         """
@@ -1522,24 +1554,28 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logic = DivideImageLogic()
         divideStep = [22, 33, 44]
 
-        VOIs, indices = logic.getIndexVOI(volumeNode, divideStep)
+        # VOIs, indices = logic.getIndexVOI(volumeNode, divideStep)
         # print VOIs.shape
         # print indices.shape
+        indexVOIs = logic.getIndexVOI(volumeNode, divideStep)
 
         bigMatrix = logic.getNdarray(volumeNode)
         bigImageData = logic.getImageData(volumeNode)
-        print("bigMatrix.shape: " + str(bigMatrix.shape))
-        print("bigImageData.dim: " + str(bigImageData.GetDimensions()))
+        # print("bigMatrix.shape: " + str(bigMatrix.shape))
+        # print("bigImageData.dim: " + str(bigImageData.GetDimensions()))
 
-        rand = np.random.randint(0, len(VOIs))
-        subMatrix = logic.getSubMatrix(bigMatrix, VOIs[rand])
-        subImage = logic.getSubImage(bigImageData, VOIs[rand])
+        print(len(indexVOIs))
+        rand = np.random.randint(0, len(indexVOIs))
+        subMatrix = logic.getSubMatrix(bigMatrix, indexVOIs[rand].VOI)
+        subImage = logic.getSubImage(bigImageData, indexVOIs[rand].VOI)
         # print subImage
         subMatrixFromImage = logic.getNdarray(subImage)
 
-        print rand
-        print subMatrix.shape
-        print subImage.GetDimensions()
+        print("random subMatrix No. " + str(rand))
+        print("It's VOI: " + str(indexVOIs[rand].VOI))
+        print("It's index: " + str(indexVOIs[rand].index))
+        print("Shape of subMatrix: " + str(subMatrix.shape))
+        print("Dims of subImage: " + str(subImage.GetDimensions()))
         # print subMatrixFromImage.shape
 
         print np.array_equal(subMatrix, subMatrixFromImage)
