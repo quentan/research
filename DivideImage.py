@@ -779,8 +779,10 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         #     # return False
         #     raise Exception("Failed to get ndarray!")
 
-        if node.GetClassName() in ('vtkMRMLScalarVolumeNode',
-                                   'vtkMRMLLabelMapVolumeNode'):  # scalarTypes
+        if isinstance(node, np.ndarray):
+            ndarray = node
+        elif node.GetClassName() in ('vtkMRMLScalarVolumeNode',
+                                     'vtkMRMLLabelMapVolumeNode'):  # scalarTypes
             ndarray = slicer.util.array(node.GetID())
         elif node.GetClassName() == 'vtkImageData':  # not `is`
             shape = list(node.GetDimensions())
@@ -847,9 +849,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           ]
                     # Record the index of subMatrix (VOI extent)
                     x, y, z = subMatrix.shape
-                    VOI = [i, i + x, j, j + y, k, k + z]
+                    voi = [i, i + x, j, j + y, k, k + z]
                     index = [ii, jj, kk]
-                    indexVOI.VOI = np.asarray(VOI).T  # n*6 matrix
+                    indexVOI.voi = np.asarray(voi).T  # n*6 matrix
                     indexVOI.index = np.asarray(index).T - 1  # n*3 matrix
                     indexVOIs.append(copy.copy(indexVOI))  # shallow copy
                     # indexVOIs.append(copy.deepcopy(indexVOI))  # deep copy
@@ -873,12 +875,21 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         # Put `vtkImageData` info to the dict
         counter = 0
         for i in indexVOIs:
-            isValid = self.isValidMatrix(i.VOI)
             subImageInfo.sn = counter
             subImageInfo.index = i.index
             subImageInfo.voi = i.VOI
             subImageInfo.extent = i.VOI
             subImageInfo.origin = i.VOI[::2]
+            # subImageInfo.dimensions
+
+            isValid = self.isValidMatrix(i.VOI)
+            if isValid:  # Only valid subImage has:
+                subImageInfo.spacing = imageInfo.spacing
+                # valueMax
+                # valueMin
+                # centre
+                #
+
 
 
         # origin = imageData.GetOrigin()
@@ -1008,21 +1019,35 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         return subMatrices, isValidSubMatrices
 
-    def markValidSubMatrices(self, node, rule):
+    def markValidSubMatrices(self, node, step=[40] * 3):
         """
         Mark the validation of a subMatrix with a given rule
-        @param      rule: a METHOD to give specific rule
         """
         if isinstance(node, np.ndarray):
-            subMatrix = node
+            bigMatrix = node
         elif node.GetClassName() in ('vtkMRMLScalarVolumeNode',  # scalarTypes
                                      'vtkMRMLLabelMapVolumeNode',  # scalarTypes
                                      'vtkImageData'):
-            subMatrix = self.getNdarray(node)
+            bigMatrix = self.getNdarray(node)
         else:
             raise TypeError("The node cannot be converted to NumPy array!")
 
-        for item in
+        indexVOIs = self.getIndexVOI(bigMatrix, step)
+        indexValidVOI = objdict()
+        indexValidVOIs = []
+
+        length = len(indexVOIs)
+        for i in range(length):
+            subMatrix = self.getSubMatrix(bigMatrix, indexVOIs[i].voi)
+            isValid = self.isValidMatrix(subMatrix)
+
+            indexValidVOI.index = indexVOIs[i].index
+            indexValidVOI.voi = indexVOIs[i].voi
+            indexValidVOI.isValid = isValid
+            indexValidVOIs.append(copy.copy(indexValidVOI))
+
+        # indexValidVOIs is a 1D `list`, of each item is a `dics` with 3 name-value
+        return indexValidVOIs
 
     def chopSubMatrix(self, subMatrix, value=0):
         """
@@ -1588,12 +1613,15 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
         logic = DivideImageLogic()
-        divideStep = [22, 33, 44]
+        # divideStep = [22, 33, 44]
+        divideStep = [10] * 3
 
         # VOIs, indices = logic.getIndexVOI(volumeNode, divideStep)
         # print VOIs.shape
         # print indices.shape
-        indexVOIs = logic.getIndexVOI(volumeNode, divideStep)
+        # indexVOIs = logic.getIndexVOI(volumeNode, divideStep)
+        indexVOIs = logic.markValidSubMatrices(volumeNode, divideStep)
+        # indexValidVOIs = logic.markValidSubMatrices(volumeNode, divideStep)
 
         bigMatrix = logic.getNdarray(volumeNode)
         bigImageData = logic.getImageData(volumeNode)
@@ -1602,19 +1630,32 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         print(len(indexVOIs))
         rand = np.random.randint(0, len(indexVOIs))
-        subMatrix = logic.getSubMatrix(bigMatrix, indexVOIs[rand].VOI)
-        subImage = logic.getSubImage(bigImageData, indexVOIs[rand].VOI)
+        subMatrix = logic.getSubMatrix(bigMatrix, indexVOIs[rand].voi)
+        subImage = logic.getSubImage(bigImageData, indexVOIs[rand].voi)
         # print subImage
         subMatrixFromImage = logic.getNdarray(subImage)
 
         print("random subMatrix No. " + str(rand))
-        print("It's VOI: " + str(indexVOIs[rand].VOI))
-        print("It's index: " + str(indexVOIs[rand].index))
+        print("Its VOI: " + str(indexVOIs[rand].voi))
+        print("Its index: " + str(indexVOIs[rand].index))
         print("Shape of subMatrix: " + str(subMatrix.shape))
         print("Dims of subImage: " + str(subImage.GetDimensions()))
         # print subMatrixFromImage.shape
 
         print np.array_equal(subMatrix, subMatrixFromImage)
+
+        length = len(indexVOIs)
+        print("Print all valid subMatrice:")
+        counter = 0
+        for i in range(length):
+            isValid = indexVOIs[i].isValid
+            if isValid:
+                print("This is subMatrix No." + str(i) + " of " + str(length))
+                print("  Its VOI: " + str(indexVOIs[i].voi))
+                print("  Its index: " + str(indexVOIs[i].index))
+                counter += 1
+
+        print(str(counter) + " valid subMatrices generated.")
 
         #
         # Test `getSubMatrices`
@@ -1881,4 +1922,92 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         vtkLogic.vtkShow()
         # Finish: VTK rendering
+
+    def test_implicitFitting2(self):
+        """
+        rendering several neighboured `vtkImageData`
+        """
+        contourVal = 0.0
+
+        logic = DivideImageLogic()
+
+        volumeNode = self.getDataFromURL()
+
+        moduleWidget = slicer.modules.DivideImageWidget
+        moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
+
+        # Get subMatrices with given step
+        divideStep = [10, 10, 10]
+        # indexValidVOIs = logic.markValidSubMatrices(volumeNode, divideStep)
+
+        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(
+            volumeNode, divideStep)
+        numValidSubMatrices = np.sum(isValidSubMatrices)
+        # numValidSubMatrices =
+        logging.info(str(numValidSubMatrices) + '/' + str(len(subMatrices)) +
+                     " valid subMatrices generated")
+
+        # Randomly pick up a valid subMatrix and fitting the points
+        idxValidMatrices = [i for i, x in enumerate(isValidSubMatrices) if x]
+        testValidMatrix = np.random.choice(idxValidMatrices)
+        # print testValidMatrix, type(testValidMatrix)
+        # testValidMatrix = 243
+        # print subMatrices[testValidMatrix]
+        coords = logic.getCoords(subMatrices[testValidMatrix])
+        # coords = logic.getCoords(subMatrices[243])
+        # print("coords: " + str(coords))
+        logging.info("Random subMatix " + str(testValidMatrix) + " has " +
+                     str(len(coords)) + " valid points")
+
+        vectorColumn = logic.implicitFitting(coords)
+        logging.debug("Vector of column:\n" + str(vectorColumn))
+        fittingResult, spacing = logic.radialBasisFunc(vectorColumn, coords)
+        logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
+        # print fittingResult.shape
+
+        imageData = logic.ndarray2vtkImageData(fittingResult, spacing=spacing)
+
+        dims = imageData.GetDimensions()
+        bounds = imageData.GetBounds()
+        logging.debug("Bounds of the sub image: " + str(bounds))
+        # spacing = imageData.GetSpacing()
+        # origin = imageData.GetOrigin()
+
         #
+        # Start: VTK rendering
+        vtkLogic = DivideImageVTKLogic()
+        # FIXME: the outside rendering has problem.
+
+        implicitVolume = vtk.vtkImplicitVolume()
+        implicitVolume.SetVolume(imageData)
+
+        sample = vtk.vtkSampleFunction()
+        sample.SetImplicitFunction(implicitVolume)
+        sample.SetModelBounds(bounds)
+        sample.SetSampleDimensions(dims)
+        sample.ComputeNormalsOff()
+
+        contour = vtk.vtkContourFilter()
+        contour.SetInputConnection(sample.GetOutputPort())
+        contour.SetValue(0, contourVal)
+
+        outline = vtk.vtkOutlineFilter()
+        outline.SetInputConnection(contour.GetOutputPort())
+
+        outlineMapper = vtk.vtkPolyDataMapper()
+        outlineMapper.SetInputConnection(outline.GetOutputPort())
+
+        outlineActor = vtk.vtkActor()
+        outlineActor.SetMapper(outlineMapper)
+        outlineActor.GetProperty().SetColor(0, 0, 0)
+
+        actor = vtkLogic.getActor(contour)
+        vtkLogic.addActor(actor)
+        vtkLogic.addActor(outlineActor)
+        logging.debug("numActor in test_implicitFitting: " + str(vtkLogic.numActor))
+
+        # Render the points
+        vtkLogic.addPoints(coords)
+
+        vtkLogic.vtkShow()
+        # Finish: VTK rendering
