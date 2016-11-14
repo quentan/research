@@ -63,11 +63,11 @@ class objdict(dict):
 
 
 #
-# class: `MedicalMatrix`
+# class: `SubMedicalImage`
 #
-class MedicalMatrix(vtk.vtkImageData):
+class SubMedicalImage(vtk.vtkImageData):
     """
-    - The class `MedicalMatrix` should:
+    - The class `SubMedicalImage` should:
       - designed for subMatrices
       - keeps a copy of the original medical image part.
       - or keeps a pointer to the original medical image part.
@@ -85,7 +85,24 @@ class MedicalMatrix(vtk.vtkImageData):
     - Notice
       - list or dict?
     """
-    pass
+    # class variables
+    sn = 0  # seial number of current subImage
+    index = [0] * 3  # [i, j, k] - ith col, jth row, kth lay
+    voi = [0] * 6  # [minX, maxX, minY, maxY, minZ, maxZ]. Equals to 'extent'
+
+    def __init__(self, l=10, w=10, h=10,  # length, width, height
+                 voxelType=vtk.VTK_UNSIGNED_CHAR,
+                 init=True):
+        if init:
+            # imageSize = [l, w, h]
+            imageData = vtk.vtkImageData()
+            imageData.SetDimensions(l, w, h)
+            imageData.AllocateScalars(voxelType, 1)
+        else:
+            pass
+        self.l = l
+        self.w = w
+        self.h = h
 
 
 #
