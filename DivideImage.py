@@ -65,7 +65,7 @@ class objdict(dict):
 #
 # class: `SubMedicalImage`
 #
-class SubMedicalImage(vtk.vtkImageData):
+class SubMedicalImage(object):
     """
     - The class `SubMedicalImage` should:
       - designed for subMatrices
@@ -90,19 +90,151 @@ class SubMedicalImage(vtk.vtkImageData):
     index = [0] * 3  # [i, j, k] - ith col, jth row, kth lay
     voi = [0] * 6  # [minX, maxX, minY, maxY, minZ, maxZ]. Equals to 'extent'
 
-    def __init__(self, l=10, w=10, h=10,  # length, width, height
+    def __new__(cls,
+                l=3, w=4, h=6,
+                voxelType=vtk.VTK_UNSIGNED_INT):
+        imageData = vtk.vtkImageData()
+        imageData.SetDimensions(l, w, h)
+        imageData.AllocateScalars(voxelType, 1)
+        # self.imageData = imageData
+
+    def __init__(self,   # parent,
+                 l=3, w=4, h=6,  # length, width, height
                  voxelType=vtk.VTK_UNSIGNED_CHAR,
                  init=True):
+
+        # vtk.vtkImageData.__init__(self, parent)
         if init:
-            # imageSize = [l, w, h]
             imageData = vtk.vtkImageData()
             imageData.SetDimensions(l, w, h)
             imageData.AllocateScalars(voxelType, 1)
-        else:
-            pass
-        self.l = l
-        self.w = w
-        self.h = h
+            self.imageData = imageData
+
+        self.dims = (l, w, h)
+        self.shape = (h, w, l)  # for NumPy
+        self.sn = 0
+        self.index = (0,) * 3
+        self.voi = (0, 1) * 3
+        self.extent = (0, 1) * 3  # equals to voi
+        self.isValid = True
+
+    def __del__(self):
+        del self.imageData
+
+    #
+    # Getter & Setter
+    # def getImageInfo(self):
+    #
+    #     imageInfo = objdict()
+    #     imageData = self.imageData
+    #
+    #     # sn
+    #     # index
+    #
+    #     origin = imageData.GetOrigin()
+    #     spacing = imageData.GetSpacing()
+    #     extent = imageData.GetExtent()
+    #     centre = imageData.GetCenter()
+    #     dimensions = imageData.GetDimensions()
+    #     number = imageData.GetNumberOfPoints()
+    #     valueMax = imageData.GetScalarTypeMax()
+    #     valueMin = imageData.GetScalarTypeMin()
+    #     length = imageData.GetLength()  # what is it?
+    #     dataType = imageData.GetScalarTypeAsString()
+    #
+    #     imageInfo = {'origin': origin,
+    #                  'spacing': spacing,
+    #                  'extent': extent,
+    #                  'centre': centre,
+    #                  'dimensions': dimensions,
+    #                  'number': number,
+    #                  'valueMax': valueMax,
+    #                  'valueMin': valueMin,
+    #                  'length': length,
+    #                  'dataType': dataType
+    #                  }
+    #
+    #     return imageInfo
+
+    def getNdarray(self):
+        pass
+
+    @property
+    def info(self):
+        return self.getImageInfo()
+
+    @property
+    def sn(self):
+        return self.snValue
+
+    @sn.setter
+    def sn(self, snValue):
+
+        if not isinstance(snValue, int):
+            raise ValueError("SN must be an integer!")
+        if snValue < 0:
+            raise ValueError("score must not be negative")
+
+        self.sn = snValue
+
+    def setSN(self, snValue):
+
+        if not isinstance(snValue, int):
+            raise ValueError("SN must be an integer!")
+        if snValue < 0:
+            raise ValueError("score must not be negative")
+
+        self.sn = snValue
+
+    def getIndex(self):
+        pass
+
+    def getVOI(self):
+        pass
+
+    def getNeighbours(self):
+        # Return 6 neighbours
+        pass
+
+    def getActor(self, color=colors.light_salmon):
+        """
+        @return     vtkActor
+        """
+        vtkSource = self.imageData
+        # Generate Normals
+        normals = vtk.vtkPolyDataNormals()
+        normals.SetInputConnection(vtkSource.GetOutputPort())
+        normals.SetFeatureAngle(60.0)
+        normals.ReleaseDataFlagOn()
+
+        stripper = vtk.vtkStripper()
+        stripper.SetInputConnection(normals.GetOutputPort())
+        stripper.ReleaseDataFlagOn()
+
+        mapper = vtk.vtkPolyDataMapper()
+        # mapper.SetInputConnection(vtkSource.GetOutputPort())
+        mapper.SetInputConnection(stripper.GetOutputPort())
+        mapper.SetScalarVisibility(False)
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.GetProperty().SetDiffuseColor(color)
+        actor.GetProperty().SetSpecular(0.3)
+        actor.GetProperty().SetSpecularPower(20)
+        actor.GetProperty().SetInterpolation(2)
+        actor.GetProperty().SetRepresentation(2)
+        # actor.GetProperty().SetEdgeVisibility(True)
+        # actor.GetProperty().SetOpacity(opacity)
+
+        return actor
+
+    # Getter & Setter
+    #
+
+    #
+    # Magic methods
+    def __concat__(self, value):  # self + value
+        pass
 
 
 #
@@ -907,19 +1039,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                 # centre
                 #
 
-
-
-        # origin = imageData.GetOrigin()
-        # spacing = imageData.GetSpacing()
-        # extent = imageData.GetExtent()
-        # centre = imageData.GetCenter()
-        # dimensions = imageData.GetDimensions()
-        # number = imageData.GetNumberOfPoints()
-        # valueMax = imageData.GetScalarTypeMax()
-        # valueMin = imageData.GetScalarTypeMin()
-        # length = imageData.GetLength()  # what is it?
-        # dataType = imageData.GetScalarTypeAsString()
-
     def getSubMatrix(self, node, VOI=[0, 10] * 3):
         """
         Extract a subMatrix from given matrix and VOI
@@ -1431,8 +1550,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test_VTKLogic()
         # self.test_implicitFunction()
         # self.test_implicitFitting()
-        self.test_getSub()
+        # self.test_getSub()
         # self.test_Extract()
+        self.test_SubMedicalImage()
 
     def getDataFromURL(self):
         """
@@ -2028,3 +2148,13 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         vtkLogic.vtkShow()
         # Finish: VTK rendering
+
+    def test_SubMedicalImage(self):
+
+        subImageData = SubMedicalImage()
+
+        actor = subImageData.getActor()
+
+        vtkLogic = DivideImageVTKLogic()
+        vtkLogic.addActor(actor)
+        vtkLogic.vtkShow()
