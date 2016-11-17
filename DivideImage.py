@@ -62,10 +62,36 @@ class objdict(dict):
             raise AttributeError("No such attribute: " + name)
 
 
+# TEST
+class Student(object):
+
+    def get_score(self):
+        return self._score
+
+    def set_score(self, value):
+        if not isinstance(value, int):
+            raise ValueError('score must be an integer!')
+        if value < 0 or value > 100:
+            raise ValueError('score must between 0 ~ 100!')
+        self._score = value
+
+    @property
+    def score(self):
+        return self._score
+
+    @score.setter
+    def score(self, value):
+        if not isinstance(value, int):
+            raise ValueError('score must be an integer!')
+        if value < 0 or value > 100:
+            raise ValueError('score must between 0 ~ 100!')
+        self._score = value
+
+
 #
 # class: `SubMedicalImage`
 #
-class SubMedicalImage(object):
+class SubMedicalImage(vtk.vtkImageData):
     """
     - The class `SubMedicalImage` should:
       - designed for subMatrices
@@ -86,16 +112,16 @@ class SubMedicalImage(object):
       - list or dict?
     """
     # class variables
-    sn = 0  # seial number of current subImage
-    index = [0] * 3  # [i, j, k] - ith col, jth row, kth lay
-    voi = [0] * 6  # [minX, maxX, minY, maxY, minZ, maxZ]. Equals to 'extent'
+    # sn = 0  # seial number of current subImage
+    # index = [0] * 3  # [i, j, k] - ith col, jth row, kth lay
+    # voi = [0] * 6  # [minX, maxX, minY, maxY, minZ, maxZ]. Equals to 'extent'
 
-    def __new__(cls,
-                l=3, w=4, h=6,
-                voxelType=vtk.VTK_UNSIGNED_INT):
-        imageData = vtk.vtkImageData()
-        imageData.SetDimensions(l, w, h)
-        imageData.AllocateScalars(voxelType, 1)
+    # def __new__(cls,
+    #             l=3, w=4, h=6,
+    #             voxelType=vtk.VTK_UNSIGNED_INT):
+    #     imageData = vtk.vtkImageData()
+    #     imageData.SetDimensions(l, w, h)
+    #     imageData.AllocateScalars(voxelType, 1)
         # self.imageData = imageData
 
     def __init__(self,   # parent,
@@ -112,7 +138,7 @@ class SubMedicalImage(object):
 
         self.dims = (l, w, h)
         self.shape = (h, w, l)  # for NumPy
-        self.sn = 0
+        self._sn = 0
         self.index = (0,) * 3
         self.voi = (0, 1) * 3
         self.extent = (0, 1) * 3  # equals to voi
@@ -121,40 +147,40 @@ class SubMedicalImage(object):
     def __del__(self):
         del self.imageData
 
-    #
+
     # Getter & Setter
-    # def getImageInfo(self):
-    #
-    #     imageInfo = objdict()
-    #     imageData = self.imageData
-    #
-    #     # sn
-    #     # index
-    #
-    #     origin = imageData.GetOrigin()
-    #     spacing = imageData.GetSpacing()
-    #     extent = imageData.GetExtent()
-    #     centre = imageData.GetCenter()
-    #     dimensions = imageData.GetDimensions()
-    #     number = imageData.GetNumberOfPoints()
-    #     valueMax = imageData.GetScalarTypeMax()
-    #     valueMin = imageData.GetScalarTypeMin()
-    #     length = imageData.GetLength()  # what is it?
-    #     dataType = imageData.GetScalarTypeAsString()
-    #
-    #     imageInfo = {'origin': origin,
-    #                  'spacing': spacing,
-    #                  'extent': extent,
-    #                  'centre': centre,
-    #                  'dimensions': dimensions,
-    #                  'number': number,
-    #                  'valueMax': valueMax,
-    #                  'valueMin': valueMin,
-    #                  'length': length,
-    #                  'dataType': dataType
-    #                  }
-    #
-    #     return imageInfo
+    def getImageInfo(self):
+
+        imageInfo = objdict()
+        imageData = self.imageData
+
+        # sn
+        # index
+
+        origin = imageData.GetOrigin()
+        spacing = imageData.GetSpacing()
+        extent = imageData.GetExtent()
+        centre = imageData.GetCenter()
+        dimensions = imageData.GetDimensions()
+        number = imageData.GetNumberOfPoints()
+        valueMax = imageData.GetScalarTypeMax()
+        valueMin = imageData.GetScalarTypeMin()
+        length = imageData.GetLength()  # what is it?
+        dataType = imageData.GetScalarTypeAsString()
+
+        imageInfo = {'origin': origin,
+                     'spacing': spacing,
+                     'extent': extent,
+                     'centre': centre,
+                     'dimensions': dimensions,
+                     'number': number,
+                     'valueMax': valueMax,
+                     'valueMin': valueMin,
+                     'length': length,
+                     'dataType': dataType
+                     }
+
+        return imageInfo
 
     def getNdarray(self):
         pass
@@ -165,7 +191,7 @@ class SubMedicalImage(object):
 
     @property
     def sn(self):
-        return self.snValue
+        return self._sn
 
     @sn.setter
     def sn(self, snValue):
@@ -175,7 +201,7 @@ class SubMedicalImage(object):
         if snValue < 0:
             raise ValueError("score must not be negative")
 
-        self.sn = snValue
+        self._sn = snValue
 
     def setSN(self, snValue):
 
@@ -184,7 +210,7 @@ class SubMedicalImage(object):
         if snValue < 0:
             raise ValueError("score must not be negative")
 
-        self.sn = snValue
+        self._sn = snValue
 
     def getIndex(self):
         pass
@@ -203,7 +229,7 @@ class SubMedicalImage(object):
         vtkSource = self.imageData
         # Generate Normals
         normals = vtk.vtkPolyDataNormals()
-        normals.SetInputConnection(vtkSource.GetOutputPort())
+        normals.SetInputData(vtkSource)
         normals.SetFeatureAngle(60.0)
         normals.ReleaseDataFlagOn()
 
@@ -236,6 +262,42 @@ class SubMedicalImage(object):
     def __concat__(self, value):  # self + value
         pass
 
+    def renderPolyData(self):
+        """
+        An auxiliary function to render the polydata extracted from the `vtkImageData`
+        """
+        imageData = self.imageData
+        if imageData is None:
+            raise TypeError("No image found!")
+
+        # Convert the image to a polydata
+        imageDataGeometryFilter = vtk.vtkImageDataGeometryFilter()
+        imageDataGeometryFilter.SetInputData(imageData)
+        imageDataGeometryFilter.Update()
+
+        mapper = vtk.vtkDataSetMapper()
+        mapper.SetInputConnection(imageDataGeometryFilter.GetOutputPort())
+        # mapper.SetInputData(imageData)  # A cube
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.GetProperty().SetPointSize(3)
+        # actor.GetProperty().SetOpacity(0.5)
+
+        # Setup rendering
+        renderer = vtk.vtkRenderer()
+        renderer.AddActor(actor)
+        renderer.SetBackground(1, 1, 1)
+        renderer.ResetCamera()
+
+        renderWindow = vtk.vtkRenderWindow()
+        renderWindow.AddRenderer(renderer)
+
+        renderWindowInteractor = vtk.vtkRenderWindowInteractor()
+
+        renderWindowInteractor.SetRenderWindow(renderWindow)
+        renderWindowInteractor.Initialize()
+        renderWindowInteractor.Start()
 
 #
 # Module
@@ -2151,10 +2213,17 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
     def test_SubMedicalImage(self):
 
-        subImageData = SubMedicalImage()
+        subImageData = SubMedicalImage(10, 10, 10)
+        subImageData.renderPolyData()
 
-        actor = subImageData.getActor()
+        # actor = subImageData.getActor()
 
-        vtkLogic = DivideImageVTKLogic()
-        vtkLogic.addActor(actor)
-        vtkLogic.vtkShow()
+        # vtkLogic = DivideImageVTKLogic(False)
+        # actor = vtkLogic.getActor(subImageData)
+        # vtkLogic.addActor(actor)
+        # vtkLogic.vtkShow(True, False, False)
+
+        # s = Student()
+        # s.score = 600
+        #
+        # print(s.score)
