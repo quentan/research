@@ -5,7 +5,6 @@
 """
 
 # TODO: Refer `ContourWidget.py` to add some interactive operation
-# TODO: design a `MedicalMatrix` class
 
 import os
 import copy
@@ -122,7 +121,7 @@ class SubMedicalImage(vtk.vtkImageData):
     #     imageData = vtk.vtkImageData()
     #     imageData.SetDimensions(l, w, h)
     #     imageData.AllocateScalars(voxelType, 1)
-        # self.imageData = imageData
+    #     self.imageData = imageData
 
     def __init__(self,   # parent,
                  l=3, w=4, h=6,  # length, width, height
@@ -139,23 +138,45 @@ class SubMedicalImage(vtk.vtkImageData):
         self.dims = (l, w, h)
         self.shape = (h, w, l)  # for NumPy
         self._sn = 0
-        self.index = (0,) * 3
-        self.voi = (0, 1) * 3
+        self._index = (0,) * 3
+        self._voi = (0, 1) * 3
         self.extent = (0, 1) * 3  # equals to voi
         self.isValid = True
 
     def __del__(self):
         del self.imageData
 
-
+    #
     # Getter & Setter
+    #
+
+    def setImageData(self, imageData):
+        """
+        Put a `vtkImageData` inside here
+        """
+        if imageData is None:
+            raise TypeError("No image data is given")
+
+        if not isinstance(imageData, vtk.vtkImageData):
+            raise TypeError("a vtkImageData is required")
+
+        self.imageData = imageData
+        return True
+
     def getImageInfo(self):
 
         imageInfo = objdict()
-        imageData = self.imageData
 
-        # sn
-        # index
+        imageData = self.imageData
+        if imageData is None:
+            raise TypeError("No image data is given")
+
+        if not isinstance(imageData, vtk.vtkImageData):
+            raise TypeError("a vtkImageData is required")
+
+        sn = self._sn
+        index = tuple(self._index)  # ndarray --> tuple, for consistency
+        voi = tuple(self._voi)  # ndarray --> tuple, for consistency
 
         origin = imageData.GetOrigin()
         spacing = imageData.GetSpacing()
@@ -177,7 +198,10 @@ class SubMedicalImage(vtk.vtkImageData):
                      'valueMax': valueMax,
                      'valueMin': valueMin,
                      'length': length,
-                     'dataType': dataType
+                     'dataType': dataType,
+                     'sn': sn,
+                     'index': index,
+                     'VOI': voi
                      }
 
         return imageInfo
@@ -189,6 +213,7 @@ class SubMedicalImage(vtk.vtkImageData):
     def info(self):
         return self.getImageInfo()
 
+    # -----------------------------------------------------------------------
     @property
     def sn(self):
         return self._sn
@@ -212,18 +237,50 @@ class SubMedicalImage(vtk.vtkImageData):
 
         self._sn = snValue
 
+    # -----------------------------------------------------------------------
+
     def getIndex(self):
         pass
+
+    @property
+    def index(self):
+        return self._index
+
+    @index.setter
+    def index(self, index):
+        if len(index) != 3:
+            raise TypeError("index is a 3-item list")
+        if not [isinstance(i, int) for i in index]:
+            raise TypeError("index needs integer number")
+
+        self._index = index
+
+    # -----------------------------------------------------------------------
 
     def getVOI(self):
         pass
 
+    @property
+    def voi(self):
+        return self._voi
+
+    @voi.setter
+    def voi(self, voi):
+        if len(voi) != 6:
+            raise TypeError("VOI is a 6-item list")
+        if not [isinstance(i, int) for i in voi]:
+            raise TypeError("VOI needs integer number")
+
+        self._voi = voi
+
+    # -----------------------------------------------------------------------
     def getNeighbours(self):
         # Return 6 neighbours
         pass
 
     def getActor(self, color=colors.light_salmon):
         """
+        It should be here.
         @return     vtkActor
         """
         vtkSource = self.imageData
@@ -262,9 +319,11 @@ class SubMedicalImage(vtk.vtkImageData):
     def __concat__(self, value):  # self + value
         pass
 
-    def renderPolyData(self):
+    #
+    # Auxiliary Functions
+    def renderPolyData(self, isInsideRenWin=False):
         """
-        An auxiliary function to render the polydata extracted from the `vtkImageData`
+        Render the polydata extracted from the `vtkImageData`
         """
         imageData = self.imageData
         if imageData is None:
@@ -284,20 +343,30 @@ class SubMedicalImage(vtk.vtkImageData):
         actor.GetProperty().SetPointSize(3)
         # actor.GetProperty().SetOpacity(0.5)
 
-        # Setup rendering
-        renderer = vtk.vtkRenderer()
+        iren = vtk.vtkRenderWindowInteractor()
+
+        if isInsideRenWin:
+            renderWin = slicer.app.layoutManager().threeDWidget(0).threeDView().renderWindow()
+            renderer = renderWin.GetRenderers().GetFirstRenderer()
+        else:
+            renderWin = vtk.vtkRenderWindow()
+            renderWin.SetSize(640, 480)
+            renderWin.SetWindowName("VTK Rendering View")
+
+            renderer = vtk.vtkRenderer()
+            renderWin.AddRenderer(renderer)
+            renderer.SetBackground(0.9, 0.9, 0.9)
+
+            interactorStyle = vtk.vtkInteractorStyleTrackballCamera()
+            iren.SetInteractorStyle(interactorStyle)
+
         renderer.AddActor(actor)
-        renderer.SetBackground(1, 1, 1)
         renderer.ResetCamera()
 
-        renderWindow = vtk.vtkRenderWindow()
-        renderWindow.AddRenderer(renderer)
+        iren.SetRenderWindow(renderWin)
+        iren.Initialize()
+        iren.Start()
 
-        renderWindowInteractor = vtk.vtkRenderWindowInteractor()
-
-        renderWindowInteractor.SetRenderWindow(renderWindow)
-        renderWindowInteractor.Initialize()
-        renderWindowInteractor.Start()
 
 #
 # Module
@@ -686,6 +755,7 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
 
             renderer = vtk.vtkRenderer()
             renderer.SetBackground(0.2, 0.3, 0.4)
+            renderWin.AddRenderer(renderer)
 
             interactorStyle = vtk.vtkInteractorStyleTrackballCamera()
             iren.SetInteractorStyle(interactorStyle)
@@ -1149,42 +1219,64 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         return subImageData
 
-    def getSubImages(self, volumeNode, step=[40] * 3):
+    def getSubImages(self, volumeNode, indexValidVOIs):
         """
-        NOTE: this method should be depricated!
-        Divide big vtkImageData into small ones.
-        Note: the order is opposite with its NumPy counterpart
+        Get a list of subImages from indexValidVOIs and imagedata
+        list item is an obj of class SubMedicalImage
         """
-        bigImageData = self.getImageData(volumeNode)
-        dims = bigImageData.GetDimensions()  # Inversed order with numpy's counterpart
-        shape = dims[::-1]  # Note the order is reversed against NumPy's order
-        step = step[::-1]
-        # print("dims: " + str(dims))
-        # extent = bigImageData.GetExtent()
-
-        extract = vtk.vtkExtractVOI()
-        extract.SetInputData(bigImageData)
-        # extract.SetVOI(0, 29, 0, 29, 15, 15)
-        extract.SetSampleRate(1, 1, 1)
-
         subImages = []
-        for i in range(0, shape[0], step[0]):
-            if shape[0] - i < step[0]:
-                step[0] = shape[0] - i
-            for j in range(0, shape[1], step[1]):
-                if shape[1] - j < step[1]:
-                    step[1] = shape[1] - j
-                for k in range(0, shape[2], step[2]):
-                    if shape[2] - k < step[2]:
-                        step[2] = shape[2] - k
-                    extract.SetVOI(i, i + step[0] - 1,
-                                   j, j + step[1] - 1,
-                                   k, k + step[2] - 1)
-                    extract.Update()  # NOTE: this is indispensible!!
-                    subImage = extract.GetOutput()  # vtkImageData
-                    subImages.append(subImage)
+        subImage = SubMedicalImage()
+        bigImageData = self.getImageData(volumeNode)
+
+        length = len(indexValidVOIs)
+        for i in range(length):
+            voi = indexValidVOIs[i].voi
+            imageData = self.getSubImage(bigImageData, voi)
+            subImage.setImageData(imageData)
+            subImage.sn = i
+            subImage.index = indexValidVOIs[i].index
+            subImage.voi = voi
+
+            subImages.append(copy.copy(subImage))
 
         return subImages
+
+    # def getSubImages(self, volumeNode, step=[40] * 3):
+    #     """
+    #     NOTE: this method should be depricated!
+    #     Divide big vtkImageData into small ones.
+    #     Note: the order is opposite with its NumPy counterpart
+    #     """
+    #     bigImageData = self.getImageData(volumeNode)
+    #     dims = bigImageData.GetDimensions()  # Inversed order with numpy's counterpart
+    #     shape = dims[::-1]  # Note the order is reversed against NumPy's order
+    #     step = step[::-1]
+    #     # print("dims: " + str(dims))
+    #     # extent = bigImageData.GetExtent()
+    #
+    #     extract = vtk.vtkExtractVOI()
+    #     extract.SetInputData(bigImageData)
+    #     # extract.SetVOI(0, 29, 0, 29, 15, 15)
+    #     extract.SetSampleRate(1, 1, 1)
+    #
+    #     subImages = []
+    #     for i in range(0, shape[0], step[0]):
+    #         if shape[0] - i < step[0]:
+    #             step[0] = shape[0] - i
+    #         for j in range(0, shape[1], step[1]):
+    #             if shape[1] - j < step[1]:
+    #                 step[1] = shape[1] - j
+    #             for k in range(0, shape[2], step[2]):
+    #                 if shape[2] - k < step[2]:
+    #                     step[2] = shape[2] - k
+    #                 extract.SetVOI(i, i + step[0] - 1,
+    #                                j, j + step[1] - 1,
+    #                                k, k + step[2] - 1)
+    #                 extract.Update()  # NOTE: this is indispensible!!
+    #                 subImage = extract.GetOutput()  # vtkImageData
+    #                 subImages.append(subImage)
+    #
+    #     return subImages
 
     def getValidSubMatrices(self, volumeNode, step=[40] * 3):
         """
@@ -2010,7 +2102,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
     def test_implicitFunction(self):
 
         bounds = [-100, 100, -100, 100, -100, 100]
-        vtkLogic = DivideImageVTKLogic()
+        vtkLogic = DivideImageVTKLogic(False)
 
         coef = np.random.standard_normal(10)
         contourVal = 0.0
@@ -2085,7 +2177,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         #
         # Start: VTK rendering
-        vtkLogic = DivideImageVTKLogic()
+        vtkLogic = DivideImageVTKLogic(False)
         # FIXME: the outside rendering has problem.
 
         implicitVolume = vtk.vtkImplicitVolume()
@@ -2213,17 +2305,31 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
     def test_SubMedicalImage(self):
 
-        subImageData = SubMedicalImage(10, 10, 10)
-        subImageData.renderPolyData()
+        # subImageData.renderPolyData()
+        filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
+        slicer.util.loadVolume(filepath)
+        volumeNode = slicer.util.getNode(pattern="MR-head")
+        self.delayDisplay("Image loaded from: " + filepath)
 
-        # actor = subImageData.getActor()
+        moduleWidget = slicer.modules.DivideImageWidget
+        moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
-        # vtkLogic = DivideImageVTKLogic(False)
-        # actor = vtkLogic.getActor(subImageData)
-        # vtkLogic.addActor(actor)
-        # vtkLogic.vtkShow(True, False, False)
+        logic = DivideImageLogic()
+        # divideStep = [22, 33, 44]
+        divideStep = [10] * 3
 
-        # s = Student()
-        # s.score = 600
-        #
-        # print(s.score)
+        indexValidVOIs = logic.markValidSubMatrices(volumeNode, divideStep)
+
+        # bigMatrix = logic.getNdarray(volumeNode)
+        # bigImageData = logic.getImageData(volumeNode)
+
+        # subImageData = SubMedicalImage()
+        subImages = logic.getSubImages(volumeNode, indexValidVOIs)
+
+        i = np.random.randint(0, len(subImages))
+        subImage = subImages[i]  # obj of class SubMedicalImage
+        subImageInfo = subImage.getImageInfo()
+        print subImageInfo
+
+        # subImage = SubMedicalImage()
+        subImage.renderPolyData()
