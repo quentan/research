@@ -61,32 +61,6 @@ class objdict(dict):
             raise AttributeError("No such attribute: " + name)
 
 
-# TEST
-class Student(object):
-
-    def get_score(self):
-        return self._score
-
-    def set_score(self, value):
-        if not isinstance(value, int):
-            raise ValueError('score must be an integer!')
-        if value < 0 or value > 100:
-            raise ValueError('score must between 0 ~ 100!')
-        self._score = value
-
-    @property
-    def score(self):
-        return self._score
-
-    @score.setter
-    def score(self, value):
-        if not isinstance(value, int):
-            raise ValueError('score must be an integer!')
-        if value < 0 or value > 100:
-            raise ValueError('score must between 0 ~ 100!')
-        self._score = value
-
-
 #
 # class: `SubMedicalImage`
 #
@@ -118,19 +92,6 @@ class SubMedicalImage(object):
       - It can has a `toNdarray` method
       - Anxiliary functions can be added for debugging, such as rendering
     """
-    # class variables
-    # sn = 0  # seial number of current subImage
-    # index = [0] * 3  # [i, j, k] - ith col, jth row, kth lay
-    # voi = [0] * 6  # [minX, maxX, minY, maxY, minZ, maxZ]. Equals to 'extent'
-
-    # def __new__(cls,
-    #             l=3, w=4, h=6,
-    #             voxelType=vtk.VTK_UNSIGNED_INT):
-    #     imageData = vtk.vtkImageData()
-    #     imageData.SetDimensions(l, w, h)
-    #     imageData.AllocateScalars(voxelType, 1)
-    #     self.imageData = imageData
-
     def __init__(self,   # parent,
                  l=3, w=4, h=6,  # length, width, height
                  voxelType=vtk.VTK_UNSIGNED_CHAR,
@@ -633,104 +594,6 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         logging.info("Random subMatix " + str(testValidMatrix) + " has " +
                      str(len(coords)) + " valid points")
 
-        # vectorColume = logic.implicitFitting(coords)
-        # logging.debug("Vector of colume:\n" + str(vectorColume))
-        # fittingResult = logic.radialBasisFunc(vectorColume, coords)
-        # logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
-        # # print fittingResult.shape
-        #
-        # # volume rendering
-        # # logic.showVolumeRendering(volumeNode)
-        #
-        # # Show vtkImageData
-        # imageData = logic.ndarray2vtkImageData(fittingResult)
-        # # print type(imageData)
-        # logic.showVtkImageData(imageData)
-
-    # TEST cases
-    def test_getValidSubMatrices(self):
-        logic = DivideImageLogic()
-        logging.info("Logic is instantiated.")
-
-        volumeNode = self.volumeSelector1.currentNode()
-        ndarray = logic.getNdarray(volumeNode)
-        ndarryShape = ndarray.shape
-        self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
-        logging.debug("The shape of the ndarray: " + str(ndarryShape))
-
-        # Get subMatrices with given step
-        divideStep = self.getDivideStep()
-
-        startTime = time.time()
-        subMatrices, isValidSubMatrices = logic.getValidSubMatrices(
-            volumeNode, divideStep)
-        logging.info("--- getValidSubMatrices uses %s seconds ---" %
-                     (time.time() - startTime))
-        numValidSubMatrices = sum(item is True for item in isValidSubMatrices)
-
-        # logging.info("There are " + str(numValidSubMatrices) +
-        #              " valid subMatrices")
-        logging.info("There are %s valid subMatrices" %
-                     str(numValidSubMatrices))
-
-    def test_getSubMatrices(self):
-        logic = DivideImageLogic()
-        logging.info("Logic is instantiated.")
-
-        volumeNode = self.volumeSelector1.currentNode()
-        ndarray = logic.getNdarray(volumeNode)
-        ndarryShape = ndarray.shape
-        self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
-        logging.debug("The shape of the ndarray: " + str(ndarryShape))
-
-        # Get subMatrices with given step
-        divideStep = self.getDivideStep()
-
-        startTime = time.time()
-        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
-        numValidSubMatrices = 0
-        for subMatrix in subMatrices:
-            if logic.isValidMatrix(subMatrix):
-                numValidSubMatrices = numValidSubMatrices + 1
-        logging.info("--- getSubMatrices uses %s seconds ---" %
-                     (time.time() - startTime))
-
-        logging.info("There are %s valid subMatrices" %
-                     str(numValidSubMatrices))
-
-    def test_getCoords(self):
-        """
-        TEST getCoords
-        Get coords from a valid random subMatrix
-        """
-        logic = DivideImageLogic()
-        logging.info("Logic is instantiated.")
-
-        volumeNode = self.volumeSelector1.currentNode()
-        ndarray = logic.getNdarray(volumeNode)
-        ndarryShape = ndarray.shape
-        self.volumeLabel.setText("Volume " + str(ndarryShape) + ':')
-        logging.debug("The shape of the ndarray: " + str(ndarryShape))
-
-        # Get subMatrices with given step
-        divideStep = self.getDivideStep()
-
-        subMatrices = logic.getSubMatrices(volumeNode, divideStep)
-        length = len(subMatrices)
-        randomNum = np.random.randint(length * 0.3, length * 0.7)
-        logging.info("This is subMatrix No." + str(randomNum))
-
-        startTime = time.time()
-        coords = logic.getCoords(subMatrices[randomNum])
-        logging.info("--- getCoords uses %s seconds ---" %
-                     (time.time() - startTime))
-
-        if coords is not False:
-            # self.delayDisplay("test")  # It should be used in `Test`
-            logging.info("There are " + str(len(coords)) +
-                         " valid points in subMatrix " + str(randomNum))
-        else:
-            logging.info("subMatix " + str(randomNum) + " is invalid")
 
 
 #
@@ -1013,12 +876,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     def hasImageData(self, volumeNode):
 
         if not volumeNode:
-            # logging.debug("hasImageData failed: no volume node")
-            # return False
             raise UnboundLocalError("hasImageData failed: no volume node")
         if volumeNode.GetImageData() is None:
-            # logging.debug("hasImageData failed: no image data in volume node")
-            # return False
             raise UnboundLocalError("hasImageData failed: no image data in volume node")
         return True
 
@@ -1029,17 +888,10 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             logging.debug("vtkImageData of the volume: " + str(imageData))
             return imageData
         else:
-            # logging.error("Error: Failed to get ImageData!")
-            # return False
             raise IOError("Error: Failed to get ImageData!")
 
     def setStep(self, step=0.1):
-        # if step > 0:
-        #     self.step = step
-        #     return True
-        # else:
-        #     logging.error("Step requires a positive value.")
-        #     return False
+
         if step <= 0:
             raise ValueError("Step requires a positive value!", step)
         else:
@@ -1047,15 +899,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             return True
 
     def getNdarray(self, node):
-
-        # if self.hasImageData(volumeNode):
-        #     ndarray = slicer.util.array(volumeNode.GetID())
-        #     logging.debug("Correspondent ndarray:\n" + str(ndarray))
-        #     return ndarray
-        # else:
-        #     # logging.error("Error: Failed to get ndarray!")
-        #     # return False
-        #     raise Exception("Failed to get ndarray!")
 
         if isinstance(node, np.ndarray):
             ndarray = node
@@ -1071,173 +914,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         return ndarray
 
-    def getSubMatrices(self, volumeNode, step=[40] * 3):
-        """
-        Divide the big matrix into small ones according with `step`
-        @param volumeNode   slicer.qMRMLNodeComboBox().currentNode()
-        @param step         shape of subMatrix
-        @return             an array containing these sub matrices
-        """
-
-        bigMatrix = self.getNdarray(volumeNode)
-        shape = bigMatrix.shape
-        # print("shape: " + str(shape))
-        subMatrices = []
-        for i in range(0, shape[0], step[0]):
-            for j in range(0, shape[1], step[1]):
-                for k in range(0, shape[2], step[2]):
-                    subMatrix = bigMatrix[i:i + step[0],
-                                          j:j + step[1],
-                                          k:k + step[2]
-                                          ]
-                    subMatrices.append(subMatrix)
-                    # Record the index of subMatrixm (VOI)
-                    x, y, z = subMatrix.shape
-
-        logging.debug("%d subMatrices generated" % len(subMatrices))
-
-        return subMatrices
-
-    def getIndexVOI(self, volumeNode, step=[40] * 3):
-        """
-        Retrieve index of VOI and index of [i, j, k]
-        1. NumPy's indexing is very fast
-        2. Sync the `vtkImageData` and its NumPy array counterpart
-        @return1    VOIs: `extend` of every subMatrix, NumPy's order
-        @return2    indices: [i, j, k] order of every subMatrix
-        """
-        bigMatrix = self.getNdarray(volumeNode)
-        shape = bigMatrix.shape
-
-        indexVOI = objdict()  # empty `objdict` object
-        indexVOIs = []  # a list containing all `objdict` objects
-
-        ii = 0  # index of subMatrix
-        for i in range(0, shape[0], step[0]):
-            ii += 1
-            jj = 0
-            for j in range(0, shape[1], step[1]):
-                jj += 1
-                kk = 0
-                for k in range(0, shape[2], step[2]):
-                    kk += 1
-                    subMatrix = bigMatrix[i:i + step[0],
-                                          j:j + step[1],
-                                          k:k + step[2]
-                                          ]
-                    # Record the index of subMatrix (VOI extent)
-                    x, y, z = subMatrix.shape
-                    voi = [i, i + x, j, j + y, k, k + z]  # tuple is better
-                    index = [ii, jj, kk]
-                    indexVOI.voi = np.asarray(voi).T  # n*6 matrix
-                    indexVOI.index = np.asarray(index).T - 1  # n*3 matrix
-                    indexVOIs.append(copy.copy(indexVOI))  # shallow copy
-                    # indexVOIs.append(copy.deepcopy(indexVOI))  # deep copy
-
-        # return np.asarray(VOIs), np.asarray(indices) - 1  # index starts at `0`
-        return indexVOIs
-
-    # TODO: put all useful information together for valide subImage
-    def getSubImageInfo(self, volumeNode, step=[30] * 3):
-        """
-        Put useful info together for valid subImage, including:
-        1. Validation of this subImage. If `False` all the followings are `None`
-        2. Normal `vtkImageData` info
-        3. Info of its `ndarray` counterpart
-        4. Serial No., index and VOI
-        """
-        subImageInfo = objdict()
-        indexVOIs = self.getIndexVOI(volumeNode, step)
-        imageInfo = self.getImageInfo(volumeNode)
-        # Get a list containing valid of all subMatrices
-        # Put `vtkImageData` info to the dict
-        counter = 0
-        for i in indexVOIs:
-            subImageInfo.sn = counter
-            subImageInfo.index = i.index
-            subImageInfo.voi = i.VOI
-            subImageInfo.extent = i.VOI
-            subImageInfo.origin = i.VOI[::2]
-            # subImageInfo.dimensions
-
-            isValid = self.isValidMatrix(i.VOI)
-            if isValid:  # Only valid subImage has:
-                subImageInfo.spacing = imageInfo.spacing
-                # valueMax
-                # valueMin
-                # centre
-                #
-
-    def getSubMatrix(self, node, VOI=[0, 10] * 3):
-        """
-        Extract a subMatrix from given matrix and VOI
-        @param1     node: 3D `ndarray`, or `volumeNode`, or `vtkImageData`
-        @param2     VOI: a 3D region: [x1, x2, y1, y2, z1, z2]
-        @return     a small 3D ndarray
-        """
-        if isinstance(node, np.ndarray):
-            bigMatrix = node
-        elif node.GetClassName() in ('vtkMRMLScalarVolumeNode',  # scalarTypes
-                                     'vtkMRMLLabelMapVolumeNode',  # scalarTypes
-                                     'vtkImageData'):
-            bigMatrix = self.getNdarray(node)
-        else:
-            raise TypeError("The node cannot be converted to NumPy array!")
-
-        subMatrix = bigMatrix[VOI[0]:VOI[1],
-                              VOI[2]:VOI[3],
-                              VOI[4]:VOI[5]]
-        return subMatrix
-
-    def getSubImage(self, bigImageData, VOI=[0, 10] * 3):
-        """
-        Extract a subImageData from given `vtkImageData` and VOI
-        NOTE! The order has be converted to NumPy's order!!
-        @param1     bigImageData: a big `vtkImageData`
-        @param2     VOI: __in NumPy's order!__
-        @return     a small `vtkImageData`
-        """
-        t = np.asarray(VOI) + np.asarray([0, -1] * 3)  # index of vtk is different
-        VOI = np.asarray([t[4], t[5], t[2], t[3], t[0], t[1]])  # swap to adpot to NumPy
-        logging.debug("VOI[1::2]: " + str(VOI[1::2]))
-
-        dims = bigImageData.GetDimensions()
-        if np.sum(VOI[1::2] <= dims) != 3:  # overflow
-            raise Exception("VOI overflow!")
-
-        if VOI[0] >= VOI[1] or VOI[2] >= VOI[3] or VOI[4] >= VOI[5]:
-            raise Exception("VOI overflow!")
-
-        extract = vtk.vtkExtractVOI()
-        extract.SetInputData(bigImageData)
-        extract.SetVOI(VOI)
-        extract.Update()
-        subImageData = extract.GetOutput()
-
-        return subImageData
-
-    def getSubImages(self, volumeNode, indexValidVOIs):
-        """
-        Get a list of subImages from indexValidVOIs and imagedata
-        list item is an obj of class SubMedicalImage
-        """
-        subImages = []
-        subImage = SubMedicalImage()
-        bigImageData = self.getImageData(volumeNode)
-
-        length = len(indexValidVOIs)
-        for i in range(length):
-            voi = indexValidVOIs[i].voi
-            imageData = self.getSubImage(bigImageData, voi)
-            subImage.setImageData(imageData)
-            subImage.sn = i
-            subImage.index = indexValidVOIs[i].index
-            subImage.voi = voi
-
-            subImages.append(copy.copy(subImage))
-
-        return subImages
-
     def getSubImageList(self, imageData, step=[40] * 3):
         """
         This method should replace many other similar methods.
@@ -1248,7 +924,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         output:
             @return:        <type list> a list of SubMedicalImage objects
         """
-        # TODO: parallelise the loop for acceleration
+        # TODO: parallelise the loops for acceleration
         bigMatrix = self.getNdarray(imageData)
         shape = bigMatrix.shape
 
@@ -1295,43 +971,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         # return np.asarray(VOIs), np.asarray(indices) - 1  # index starts at `0`
         return subImageList
 
-    # def getSubImages(self, volumeNode, step=[40] * 3):
-    #     """
-    #     NOTE: this method should be depricated!
-    #     Divide big vtkImageData into small ones.
-    #     Note: the order is opposite with its NumPy counterpart
-    #     """
-    #     bigImageData = self.getImageData(volumeNode)
-    #     dims = bigImageData.GetDimensions()  # Inversed order with numpy's counterpart
-    #     shape = dims[::-1]  # Note the order is reversed against NumPy's order
-    #     step = step[::-1]
-    #     # print("dims: " + str(dims))
-    #     # extent = bigImageData.GetExtent()
-    #
-    #     extract = vtk.vtkExtractVOI()
-    #     extract.SetInputData(bigImageData)
-    #     # extract.SetVOI(0, 29, 0, 29, 15, 15)
-    #     extract.SetSampleRate(1, 1, 1)
-    #
-    #     subImages = []
-    #     for i in range(0, shape[0], step[0]):
-    #         if shape[0] - i < step[0]:
-    #             step[0] = shape[0] - i
-    #         for j in range(0, shape[1], step[1]):
-    #             if shape[1] - j < step[1]:
-    #                 step[1] = shape[1] - j
-    #             for k in range(0, shape[2], step[2]):
-    #                 if shape[2] - k < step[2]:
-    #                     step[2] = shape[2] - k
-    #                 extract.SetVOI(i, i + step[0] - 1,
-    #                                j, j + step[1] - 1,
-    #                                k, k + step[2] - 1)
-    #                 extract.Update()  # NOTE: this is indispensible!!
-    #                 subImage = extract.GetOutput()  # vtkImageData
-    #                 subImages.append(subImage)
-    #
-    #     return subImages
-
     def getValidSubMatrices(self, volumeNode, step=[40] * 3):
         """
         Divide the big matrix into small ones according with `step`
@@ -1362,36 +1001,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         logging.debug("%d subMatrices generated" % len(subMatrices))
 
         return subMatrices, isValidSubMatrices
-
-    def markValidSubMatrices(self, node, step=[40] * 3):
-        """
-        Mark the validation of a subMatrix with a given rule
-        """
-        if isinstance(node, np.ndarray):
-            bigMatrix = node
-        elif node.GetClassName() in ('vtkMRMLScalarVolumeNode',  # scalarTypes
-                                     'vtkMRMLLabelMapVolumeNode',  # scalarTypes
-                                     'vtkImageData'):
-            bigMatrix = self.getNdarray(node)
-        else:
-            raise TypeError("The node cannot be converted to NumPy array!")
-
-        indexVOIs = self.getIndexVOI(bigMatrix, step)
-        indexValidVOI = objdict()
-        indexValidVOIs = []
-
-        length = len(indexVOIs)
-        for i in range(length):
-            subMatrix = self.getSubMatrix(bigMatrix, indexVOIs[i].voi)
-            isValid = self.isValidMatrix(subMatrix)
-
-            indexValidVOI.index = indexVOIs[i].index
-            indexValidVOI.voi = indexVOIs[i].voi
-            indexValidVOI.isValid = isValid
-            indexValidVOIs.append(copy.copy(indexValidVOI))
-
-        # indexValidVOIs is a 1D `list`, of each item is a `dics` with 3 name-value
-        return indexValidVOIs
 
     def chopSubMatrix(self, subMatrix, value=0):
         """
@@ -1485,40 +1094,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             # return False
             raise Exception("getCoords: Invalid subMatrix")
 
-    def getImageInfo(self, imageData):
-        """
-        Record information of vtkImageData into a dict.
-        All these info can be acquired by `imageData.GetXXX()`
-        @param imageData    vtkImageData var
-        @return dict        a dict containing these information
-        """
-        imageInfo = objdict()
-        origin = imageData.GetOrigin()
-        spacing = imageData.GetSpacing()
-        extent = imageData.GetExtent()
-        centre = imageData.GetCenter()
-        dimensions = imageData.GetDimensions()
-        number = imageData.GetNumberOfPoints()
-        valueMax = imageData.GetScalarTypeMax()
-        valueMin = imageData.GetScalarTypeMin()
-        length = imageData.GetLength()  # what is it?
-        dataType = imageData.GetScalarTypeAsString()
-
-        imageInfo = {'origin': origin,
-                     'spacing': spacing,
-                     'extent': extent,
-                     'centre': centre,
-                     'dimensions': dimensions,
-                     'number': number,
-                     'valueMax': valueMax,
-                     'valueMin': valueMin,
-                     'length': length,
-                     'dataType': dataType
-                     }
-
-        logging.debug("imageInfo: \n" + str(imageInfo))
-        return imageInfo
-
     def showVolume(self, volumeNode):
         # This is not 3D scene showing.
         applicationLogic = slicer.app.applicationLogic()
@@ -1543,26 +1118,6 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         displayNode.UnRegister(logic)
         logic.UpdateDisplayNodeFromVolumeNode(displayNode, volumeNode)
         volumeNode.AddAndObserveDisplayNodeID(displayNode.GetID())
-
-    def showVtkImageData(self, imageData):
-        # NOTE: not work!
-        """
-        Create a volume node from scratch
-        See "https://www.slicer.org/slicerWiki/index.php/Documentation/4.5/Modules/Volumes"
-        """
-        # imageData = vtk.vtkImageData()
-        # imageData.SetDimensions(dims)
-        # imageData.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)  # TODO: need
-        # change
-        volumeNode = slicer.vtkMRMLScalarVolumeNode()
-        volumeNode.SetAndObserveImageData(imageData)
-        displayNode = slicer.vtkMRMLScalarVolumeDisplayNode()
-        slicer.mrmlScene.AddNode(volumeNode)
-        slicer.mrmlScene.AddNode(displayNode)
-        volumeNode.SetAndObserveDisplayNodeID(displayNode.GetID())
-        displayNode.SetAndObserveColorNodeID('vtkMRMLColorTableNodeGrey')
-
-        # displayNode.AddViewNode(volumeNode)
 
     def implicitFitting(self, data):
         """
@@ -1617,16 +1172,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         M0 = np.dot(pinvM11, M12)
         M00 = M22 - np.dot(M12.T, M0)
 
-        # eigen_value, eigen_vec = np.linalg.eig(M00)
-        # positive = eigen_value > 0
-        # if np.sum(positive) < len(positive):  # Not positive. Always False
-        #     M00 = np.dot(M00.T, M00)
-        #     eigen_value, eigen_vec = np.linalg.eig(np.dot(invC, M00))
-        #     logging.info("Not Positive Definite")
-
         eigen_value, eigen_vec = np.linalg.eig(np.dot(invC, M00))
-        # D = np.diag(eigen_value)
-        # max_eigen_value = np.amax(eigen_value)
         max_eigen_idx = np.argmax(eigen_value)
 
         # Find the fitting
@@ -1788,49 +1334,6 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         volumeNode = slicer.util.getNode(pattern="MR-head")
 
         return volumeNode
-
-    def test1_DivideImage(self):
-        """
-        Generate a 10*10 array and get its topleft and bottomright.
-        """
-
-        self.delayDisplay("Run Test No. 1")
-        logging.info(
-            "\nTest No. 1: Generate a 10*10 array and get its topleft and bottomright.")
-
-        # arr = np.random.randint(0, 101, size=(30, 15))
-        arr = np.arange(100).reshape(10, 10)
-        logging.info("A 10*10 2D array: \n" + str(arr))
-
-        slice1 = arr[:5, :5]
-        slice2 = arr[5:, 5:]
-        logging.info("Topleft: \n" + str(slice1))
-        logging.info("Bottomright: \n" + str(slice2))
-        logging.info("Topleft + Bottomright: \n" + str(slice1 + slice2))
-
-    def test2_DivideImage(self):
-        """
-        Generate a 10*10 array and get its sub-arrays with given steps.
-        """
-
-        self.delayDisplay("Run Test No. 2")
-        logging.info(
-            "\nTest No. 2: Generate a 2D matrix and divide it into small ones.")
-
-        # arr = np.random.randint(0, 101, size=(30, 15))
-        arr = np.arange(100).reshape(10, 10)
-        logging.info("A random 2D array: \n" + str(arr))
-
-        step_x, step_y = [3, 3]  # Change the step to see more
-        num = 0
-        shape_x, shape_y = arr.shape
-        for i in range(0, shape_x, step_x):
-            for j in range(0, shape_y, step_y):
-                slice = arr[i:i + step_x, j:j + step_y]
-                num = num + 1
-                logging.info("No. %d: \n" % num + str(slice))
-
-        logging.info("%d sub arrays printed" % num)
 
     def test3_DivideImage(self):
 
