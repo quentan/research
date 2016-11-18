@@ -90,7 +90,7 @@ class Student(object):
 #
 # class: `SubMedicalImage`
 #
-class SubMedicalImage(vtk.vtkImageData):
+class SubMedicalImage(object):
     """
     - The class `SubMedicalImage` should:
       - designed for subMatrices
@@ -109,6 +109,14 @@ class SubMedicalImage(vtk.vtkImageData):
       - ...
     - Notice
       - list or dict?
+    - Note when implement:
+      - The most important data is the sub-`vtkImageData`, which has already kept `extent`
+      - The `extent` kept by the sub-image is lightly different with `voi`:
+        - 'extent': (20, 29, 0, 9, 120, 129)
+        - 'VOI': (120, 130, 0, 10, 20, 30)
+      - `index` and `sn` should be added manually
+      - It can has a `toNdarray` method
+      - Anxiliary functions can be added for debugging, such as rendering
     """
     # class variables
     # sn = 0  # seial number of current subImage
@@ -162,6 +170,43 @@ class SubMedicalImage(vtk.vtkImageData):
 
         self.imageData = imageData
         return True
+
+    def setImageArray(self, imageArray):
+        """
+        Put a `ndarray` inside Here
+        It should be corresponding to the `vtkImageData`
+        """
+        if imageArray is None:
+            raise TypeError("No ndarray is given")
+
+        if not isinstance(imageArray, np.ndarray):
+            raise TypeError("a NumPy ndarray is required")
+
+        self.imageArray = imageArray
+        return True
+
+    def isRightArray(self):
+        """
+        An auxiliary method to certify whether the ndarray is corresponding
+        to the `vtkImageData`
+        """
+        imageData = self.imageData
+        imageArray = self.imageArray
+
+        if imageData is None or imageArray is None:
+            raise TypeError("Initialise the image first!")
+
+        shape = list(imageData.GetDimensions())
+        shape.reverse()
+        ndarray = vtk.util.numpy_support.vtk_to_numpy(imageData.GetPointData().GetScalars()).reshape(shape)
+
+        # logging.debug("Corresponding test of vtkImageData and NumPy array.")
+        if np.array_equal(imageArray, ndarray):
+            # logging.debug("Passed!")
+            return True
+        else:
+            # logging.debug("NOT passed!")
+            return False
 
     def getImageInfo(self):
 
@@ -228,19 +273,7 @@ class SubMedicalImage(vtk.vtkImageData):
 
         self._sn = snValue
 
-    def setSN(self, snValue):
-
-        if not isinstance(snValue, int):
-            raise ValueError("SN must be an integer!")
-        if snValue < 0:
-            raise ValueError("score must not be negative")
-
-        self._sn = snValue
-
     # -----------------------------------------------------------------------
-
-    def getIndex(self):
-        pass
 
     @property
     def index(self):
@@ -256,9 +289,6 @@ class SubMedicalImage(vtk.vtkImageData):
         self._index = index
 
     # -----------------------------------------------------------------------
-
-    def getVOI(self):
-        pass
 
     @property
     def voi(self):
@@ -277,39 +307,6 @@ class SubMedicalImage(vtk.vtkImageData):
     def getNeighbours(self):
         # Return 6 neighbours
         pass
-
-    def getActor(self, color=colors.light_salmon):
-        """
-        It should be here.
-        @return     vtkActor
-        """
-        vtkSource = self.imageData
-        # Generate Normals
-        normals = vtk.vtkPolyDataNormals()
-        normals.SetInputData(vtkSource)
-        normals.SetFeatureAngle(60.0)
-        normals.ReleaseDataFlagOn()
-
-        stripper = vtk.vtkStripper()
-        stripper.SetInputConnection(normals.GetOutputPort())
-        stripper.ReleaseDataFlagOn()
-
-        mapper = vtk.vtkPolyDataMapper()
-        # mapper.SetInputConnection(vtkSource.GetOutputPort())
-        mapper.SetInputConnection(stripper.GetOutputPort())
-        mapper.SetScalarVisibility(False)
-
-        actor = vtk.vtkActor()
-        actor.SetMapper(mapper)
-        actor.GetProperty().SetDiffuseColor(color)
-        actor.GetProperty().SetSpecular(0.3)
-        actor.GetProperty().SetSpecularPower(20)
-        actor.GetProperty().SetInterpolation(2)
-        actor.GetProperty().SetRepresentation(2)
-        # actor.GetProperty().SetEdgeVisibility(True)
-        # actor.GetProperty().SetOpacity(opacity)
-
-        return actor
 
     # Getter & Setter
     #
@@ -1130,7 +1127,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           ]
                     # Record the index of subMatrix (VOI extent)
                     x, y, z = subMatrix.shape
-                    voi = [i, i + x, j, j + y, k, k + z]
+                    voi = [i, i + x, j, j + y, k, k + z]  # tuple is better
                     index = [ii, jj, kk]
                     indexVOI.voi = np.asarray(voi).T  # n*6 matrix
                     indexVOI.index = np.asarray(index).T - 1  # n*3 matrix
@@ -1240,6 +1237,62 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             subImages.append(copy.copy(subImage))
 
         return subImages
+
+    def getSubImageList(self, imageData, step=[40] * 3):
+        """
+        This method should replace many other similar methods.
+        Generate a list of sub-`vtkImageData` containing `sn`, `index` and `voi`
+        input:
+            @imageData:     big `vtkImageData`
+            @step:
+        output:
+            @return:        <type list> a list of sub-`vtkImageData`
+        """
+        bigMatrix = self.getNdarray(imageData)
+        shape = bigMatrix.shape
+
+        extract = vtk.vtkExtractVOI()
+        extract.SetInputData(imageData)
+
+        subImage = SubMedicalImage()
+        subImageList = []
+
+        counter = 0
+        ii = 0  # index of subMatrix
+        for i in range(0, shape[0], step[0]):
+            ii += 1
+            jj = 0
+            for j in range(0, shape[1], step[1]):
+                jj += 1
+                kk = 0
+                for k in range(0, shape[2], step[2]):
+                    kk += 1
+                    subMatrix = bigMatrix[i:i + step[0],
+                                          j:j + step[1],
+                                          k:k + step[2]
+                                          ]
+                    # Record the index of subMatrix (VOI extent)
+                    x, y, z = subMatrix.shape
+                    voi = (i, i + x, j, j + y, k, k + z)
+                    index = (ii - 1, jj - 1, kk - 1)
+
+                    # NOTE: the relationship between `voi` and `extent`
+                    extent = (voi[4], voi[5] - 1, voi[2], voi[3] - 1, voi[0], voi[1] - 1)
+                    extract.SetVOI(extent)
+                    extract.Update()
+                    subImage.setImageData(extract.GetOutput())
+                    subImage.setImageArray(subMatrix)
+                    # if not subImage.isRightArray():
+                    #     raise Exception("Not corresponding!")
+                    subImage.sn = counter
+                    subImage.voi = voi
+                    subImage.index = index
+                    subImageList.append(subImage)
+
+                    counter += 1
+
+        # return np.asarray(VOIs), np.asarray(indices) - 1  # index starts at `0`
+        return subImageList
 
     # def getSubImages(self, volumeNode, step=[40] * 3):
     #     """
@@ -1704,9 +1757,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test_VTKLogic()
         # self.test_implicitFunction()
         # self.test_implicitFitting()
-        # self.test_getSub()
+        self.test_getSub()
         # self.test_Extract()
-        self.test_SubMedicalImage()
+        # self.test_SubMedicalImage()
 
     def getDataFromURL(self):
         """
@@ -1911,42 +1964,48 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # print VOIs.shape
         # print indices.shape
         # indexVOIs = logic.getIndexVOI(volumeNode, divideStep)
-        indexVOIs = logic.markValidSubMatrices(volumeNode, divideStep)
+        # indexVOIs = logic.markValidSubMatrices(volumeNode, divideStep)
         # indexValidVOIs = logic.markValidSubMatrices(volumeNode, divideStep)
 
-        bigMatrix = logic.getNdarray(volumeNode)
+        # bigMatrix = logic.getNdarray(volumeNode)
         bigImageData = logic.getImageData(volumeNode)
         # print("bigMatrix.shape: " + str(bigMatrix.shape))
         # print("bigImageData.dim: " + str(bigImageData.GetDimensions()))
 
-        print(len(indexVOIs))
-        rand = np.random.randint(0, len(indexVOIs))
-        subMatrix = logic.getSubMatrix(bigMatrix, indexVOIs[rand].voi)
-        subImage = logic.getSubImage(bigImageData, indexVOIs[rand].voi)
-        # print subImage
-        subMatrixFromImage = logic.getNdarray(subImage)
+        subImageDataList = logic.getSubImageList(bigImageData, divideStep)
+        length = len(subImageDataList)
+        rand = np.random.randint(0, length)
+        subImage = subImageDataList[rand]
+        print subImage.getImageInfo()
 
-        print("random subMatrix No. " + str(rand))
-        print("Its VOI: " + str(indexVOIs[rand].voi))
-        print("Its index: " + str(indexVOIs[rand].index))
-        print("Shape of subMatrix: " + str(subMatrix.shape))
-        print("Dims of subImage: " + str(subImage.GetDimensions()))
-        # print subMatrixFromImage.shape
-
-        print np.array_equal(subMatrix, subMatrixFromImage)
-
-        length = len(indexVOIs)
-        print("Print all valid subMatrice:")
-        counter = 0
-        for i in range(length):
-            isValid = indexVOIs[i].isValid
-            if isValid:
-                print("This is subMatrix No." + str(i) + " of " + str(length))
-                print("  Its VOI: " + str(indexVOIs[i].voi))
-                print("  Its index: " + str(indexVOIs[i].index))
-                counter += 1
-
-        print(str(counter) + " valid subMatrices generated.")
+        # print(len(indexVOIs))
+        # rand = np.random.randint(0, len(indexVOIs))
+        # subMatrix = logic.getSubMatrix(bigMatrix, indexVOIs[rand].voi)
+        # subImage = logic.getSubImage(bigImageData, indexVOIs[rand].voi)
+        # # print subImage
+        # subMatrixFromImage = logic.getNdarray(subImage)
+        #
+        # print("random subMatrix No. " + str(rand))
+        # print("Its VOI: " + str(indexVOIs[rand].voi))
+        # print("Its index: " + str(indexVOIs[rand].index))
+        # print("Shape of subMatrix: " + str(subMatrix.shape))
+        # print("Dims of subImage: " + str(subImage.GetDimensions()))
+        # # print subMatrixFromImage.shape
+        #
+        # print np.array_equal(subMatrix, subMatrixFromImage)
+        #
+        # length = len(indexVOIs)
+        # print("Print all valid subMatrice:")
+        # counter = 0
+        # for i in range(length):
+        #     isValid = indexVOIs[i].isValid
+        #     if isValid:
+        #         print("This is subMatrix No." + str(i) + " of " + str(length))
+        #         print("  Its VOI: " + str(indexVOIs[i].voi))
+        #         print("  Its index: " + str(indexVOIs[i].index))
+        #         counter += 1
+        #
+        # print(str(counter) + " valid subMatrices generated.")
 
         #
         # Test `getSubMatrices`
