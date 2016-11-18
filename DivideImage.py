@@ -1246,8 +1246,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             @imageData:     big `vtkImageData`
             @step:
         output:
-            @return:        <type list> a list of sub-`vtkImageData`
+            @return:        <type list> a list of SubMedicalImage objects
         """
+        # TODO: parallelise the loop for acceleration
         bigMatrix = self.getNdarray(imageData)
         shape = bigMatrix.shape
 
@@ -1257,7 +1258,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         subImage = SubMedicalImage()
         subImageList = []
 
-        counter = 0
+        sn = 0
         ii = 0  # index of subMatrix
         for i in range(0, shape[0], step[0]):
             ii += 1
@@ -1284,12 +1285,12 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     subImage.setImageArray(subMatrix)
                     # if not subImage.isRightArray():
                     #     raise Exception("Not corresponding!")
-                    subImage.sn = counter
+                    subImage.sn = sn
                     subImage.voi = voi
                     subImage.index = index
                     subImageList.append(subImage)
 
-                    counter += 1
+                    sn += 1
 
         # return np.asarray(VOIs), np.asarray(indices) - 1  # index starts at `0`
         return subImageList
@@ -1972,7 +1973,9 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # print("bigMatrix.shape: " + str(bigMatrix.shape))
         # print("bigImageData.dim: " + str(bigImageData.GetDimensions()))
 
-        subImageDataList = logic.getSubImageList(bigImageData, divideStep)
+        startTime = time.time()
+        subImageDataList = logic.getSubImageList(bigImageData, divideStep)  # 0.5s
+        print("--- getSubImageList uses %s seconds ---" % (time.time() - startTime))
         length = len(subImageDataList)
         rand = np.random.randint(0, length)
         subImage = subImageDataList[rand]
