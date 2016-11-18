@@ -94,23 +94,21 @@ class SubMedicalImage(object):
     """
     def __init__(self,   # parent,
                  l=3, w=4, h=6,  # length, width, height
-                 voxelType=vtk.VTK_UNSIGNED_CHAR,
-                 init=True):
+                 voxelType=vtk.VTK_UNSIGNED_CHAR):
 
-        # vtk.vtkImageData.__init__(self, parent)
-        if init:
-            imageData = vtk.vtkImageData()
-            imageData.SetDimensions(l, w, h)
-            imageData.AllocateScalars(voxelType, 1)
-            self.imageData = imageData
+        imageData = vtk.vtkImageData()
+        imageData.SetDimensions(l, w, h)
+        imageData.AllocateScalars(voxelType, 1)
+        self.imageData = imageData
 
-        self.dims = (l, w, h)
-        self.shape = (h, w, l)  # for NumPy
+        self._init = False
         self._sn = 0
         self._index = (0,) * 3
         self._voi = (0, 1) * 3
-        self.extent = (0, 1) * 3  # equals to voi
-        self.isValid = True
+        self._isValid = False
+        self.dims = (l, w, h)
+        self.shape = (h, w, l)  # for NumPy
+        self.extent = (0, 1) * 3
 
     def __del__(self):
         del self.imageData
@@ -132,6 +130,12 @@ class SubMedicalImage(object):
         self.imageData = imageData
         return True
 
+    def getImageData(self):
+
+        if self.imageData is None:
+            raise UnboundLocalError("Image data is uninitialised.")
+        return self.imageData
+
     def setImageArray(self, imageArray):
         """
         Put a `ndarray` inside Here
@@ -145,6 +149,11 @@ class SubMedicalImage(object):
 
         self.imageArray = imageArray
         return True
+
+    def getImageArray(self):
+        if self.imageArray is None:
+            raise UnboundLocalError("The ndarray is uninitialised.")
+        return self.imageArray
 
     def isRightArray(self):
         """
@@ -212,12 +221,17 @@ class SubMedicalImage(object):
 
         return imageInfo
 
-    def getNdarray(self):
-        pass
-
     @property
     def info(self):
         return self.getImageInfo()
+
+    @property
+    def init(self):
+        return self._init
+
+    @init.setter
+    def init(self, value):
+        self._init = value
 
     # -----------------------------------------------------------------------
     @property
@@ -265,6 +279,15 @@ class SubMedicalImage(object):
         self._voi = voi
 
     # -----------------------------------------------------------------------
+
+    @property
+    def isValid(self):
+        return self._isValid
+
+    @isValid.setter
+    def isValid(self, value):
+        self._isValid = value
+
     def getNeighbours(self):
         # Return 6 neighbours
         pass
@@ -438,6 +461,8 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
     #
     # Getter & Setter
     #
+    # -----------------------------------------------------------------------
+
     def getDivideStep(self):
         unicodeStep = self.divideStepWidget.coordinates  # unicode list
         if unicodeStep:
@@ -461,6 +486,26 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
 
         return True
 
+    @property
+    def step(self):
+        unicodeStep = self.divideStepWidget.coordinates  # unicode list
+        if not unicodeStep:
+            raise UnboundLocalError("The coordinates is uninitialised.")
+        else:
+            divideStep = [int(x) for x in unicodeStep.split(',')]  # int list
+            return divideStep
+
+    @step.setter
+    def step(self, stepValue=[10] * 3):
+
+        if len(stepValue) != 3:
+            raise TypeError("Step should be given as [intX, intY, intZ]")
+
+        # unicodeStep = [unicode(i) for i in step]  # Wrong
+        unicodeStep = str(stepValue)[1: -1]  # trim the `[]` symbol
+        self.divideStepWidget.coordinates = unicodeStep
+
+    # -----------------------------------------------------------------------
     #
     # Response functions
     #
@@ -593,7 +638,6 @@ class DivideImageWidget(ScriptedLoadableModuleWidget):
         np.savetxt('/tmp/coords.txt', coords)
         logging.info("Random subMatix " + str(testValidMatrix) + " has " +
                      str(len(coords)) + " valid points")
-
 
 
 #
@@ -914,7 +958,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         return ndarray
 
-    def getSubImageList(self, imageData, step=[40] * 3):
+    def getSubImageList(self, imageData, step=[40] * 3, doValid=False):
         """
         This method should replace many other similar methods.
         Generate a list of sub-`vtkImageData` containing `sn`, `index` and `voi`
@@ -961,14 +1005,18 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     subImage.setImageArray(subMatrix)
                     # if not subImage.isRightArray():
                     #     raise Exception("Not corresponding!")
+                    subImage.init = True
                     subImage.sn = sn
                     subImage.voi = voi
                     subImage.index = index
-                    subImageList.append(subImage)
+
+                    if doValid:
+                        subImage.isValid = self.isValidMatrix(subMatrix)
+
+                    subImageList.append(copy.copy(subImage))
 
                     sn += 1
 
-        # return np.asarray(VOIs), np.asarray(indices) - 1  # index starts at `0`
         return subImageList
 
     def getValidSubMatrices(self, volumeNode, step=[40] * 3):
@@ -1449,9 +1497,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         vtkLogic.vtkShow()
 
     def test_getSub(self):
-        """
-        Test running time of getSubImages and getSubMatrices
-        """
+
         filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
         slicer.util.loadVolume(filepath)
         volumeNode = slicer.util.getNode(pattern="MR-head")
@@ -1464,88 +1510,24 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # divideStep = [22, 33, 44]
         divideStep = [10] * 3
 
-        # VOIs, indices = logic.getIndexVOI(volumeNode, divideStep)
-        # print VOIs.shape
-        # print indices.shape
-        # indexVOIs = logic.getIndexVOI(volumeNode, divideStep)
-        # indexVOIs = logic.markValidSubMatrices(volumeNode, divideStep)
-        # indexValidVOIs = logic.markValidSubMatrices(volumeNode, divideStep)
-
-        # bigMatrix = logic.getNdarray(volumeNode)
         bigImageData = logic.getImageData(volumeNode)
-        # print("bigMatrix.shape: " + str(bigMatrix.shape))
-        # print("bigImageData.dim: " + str(bigImageData.GetDimensions()))
 
         startTime = time.time()
-        subImageDataList = logic.getSubImageList(bigImageData, divideStep)  # 0.5s
+        subImageDataList = logic.getSubImageList(bigImageData, divideStep, True)  # 0.5s
         print("--- getSubImageList uses %s seconds ---" % (time.time() - startTime))
-        length = len(subImageDataList)
-        rand = np.random.randint(0, length)
-        subImage = subImageDataList[rand]
-        print subImage.getImageInfo()
 
-        # print(len(indexVOIs))
-        # rand = np.random.randint(0, len(indexVOIs))
-        # subMatrix = logic.getSubMatrix(bigMatrix, indexVOIs[rand].voi)
-        # subImage = logic.getSubImage(bigImageData, indexVOIs[rand].voi)
-        # # print subImage
-        # subMatrixFromImage = logic.getNdarray(subImage)
+        # length = len(subImageDataList)
+        # rand = np.random.randint(0, length)
+        # subImage = subImageDataList[rand]
+        # print subImage.getImageInfo()
         #
-        # print("random subMatrix No. " + str(rand))
-        # print("Its VOI: " + str(indexVOIs[rand].voi))
-        # print("Its index: " + str(indexVOIs[rand].index))
-        # print("Shape of subMatrix: " + str(subMatrix.shape))
-        # print("Dims of subImage: " + str(subImage.GetDimensions()))
-        # # print subMatrixFromImage.shape
-        #
-        # print np.array_equal(subMatrix, subMatrixFromImage)
-        #
-        # length = len(indexVOIs)
-        # print("Print all valid subMatrice:")
-        # counter = 0
-        # for i in range(length):
-        #     isValid = indexVOIs[i].isValid
-        #     if isValid:
-        #         print("This is subMatrix No." + str(i) + " of " + str(length))
-        #         print("  Its VOI: " + str(indexVOIs[i].voi))
-        #         print("  Its index: " + str(indexVOIs[i].index))
-        #         counter += 1
-        #
-        # print(str(counter) + " valid subMatrices generated.")
-
-        #
-        # Test `getSubMatrices`
-        # startTime = time.time()
-        # subMatrices = logic.getSubMatrices(volumeNode, divideStep)
-        # i = np.random.randint(0, len(subMatrices))
-        # logging.info("--- getSubMatrices uses %s seconds ---" %
-        #              (time.time() - startTime))
-        # print("length of subMatrices: " + str(len(subMatrices)))
-        # print("subMatrix No." + str(i) + ": " + str(subMatrices[i].shape))
-        #
-        # #
-        # # The shape of every subMatrix
-        # i = 0
-        # lengthSubMatrices = len(subMatrices)
-        # while i < lengthSubMatrices:
-        #     print("shape of subMatrix " + str(i) + ": " + str(subMatrices[i].shape))
-        #     i += 10
-
-        #
-        # Test `getSubImages`
-        # startTime = time.time()
-        # subImages = logic.getSubImages(volumeNode, divideStep)
-        # logging.info("--- getSubImages uses %s seconds ---" %
-        #              (time.time() - startTime))
-        # print("length of subImages: " + str(len(subImages)))
-        # print("subImage No." + str(i) + ": " + str(subImages[i].GetDimensions()))
-
-        # a = vtk.util.numpy_support.vtk_to_numpy(i.GetPointData().GetScalars()).reshape(shape)
-        # i = 7000
-        # while i < len(subImages):
-        #     print("subMatrices No. " + str(i) + ": " + str(subMatrices[i].shape))
-        #     print("subImages No. " + str(i) + ": " + str(subImages[i].GetDimensions()))
-        #     i += 1
+        # # Put a valid flag to items of subImageDataList
+        # subImageArrayList = [i.getImageArray() for i in subImageDataList]
+        # # print subImageArrayList[rand]
+        # isValidArrayList = map(logic.isValidMatrix, subImageArrayList)
+        # # print len(subImageArrayList)
+        # print isValidArrayList
+        # print np.sum(isValidArrayList)
 
     def test_EmptyVolume(self):
         """
