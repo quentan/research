@@ -288,10 +288,44 @@ class SubMedicalImage(object):
     def isValid(self, value):
         self._isValid = value
 
-    def getNeighbours(self):
+    def getNeighbours(self, shape):
         # Return 6 neighbours
-        pass
+        """
+        Get the indices of 6-neighbours for current position
+        @param      shape: the shape of big matrix
+        Note: (i, j, k) starts at (0, 0, 0)
+        (i, j, k) -->
+          Superior: (i-1, j, k)
+          Inferior: (i+1, j, k)
+          Left:     (i, j-1, k)
+          Right:    (i, j+1, k)
+          Anterior: (i, j, k-1)
+          Posterior:(i, j, k+1)
+        """
+        if not self.init:
+            raise NameError("Sub-image is uninitialised.")
 
+        neighbours = objdict()
+
+        i, j, k = self.index
+        ix, jx, kx = shape
+
+        superior = (None if i == 0 else i - 1, j, k)
+        inferior = (None if i == ix else i + 1, j, k)
+        left = (i, None if j == 0 else j - 1, k)
+        right = (i, None if j == jx else j + 1, k)
+        anterior = (i, j, None if k == 0 else k - 1)
+        posterior = (i, j, None if k == kx else k + 1)
+
+        # neighbours = (superior, inferior, left, right, anterior, posterior)
+        neighbours = {'superior': superior,
+                      'inferior': inferior,
+                      'left': left,
+                      'right': right,
+                      'anterior': anterior,
+                      'posterior': posterior}
+
+        return neighbours
     # Getter & Setter
     #
 
@@ -1010,6 +1044,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     subImage.voi = voi
                     subImage.index = index
 
+                    subImage.originalShape = shape  # keep a record of the original medical
+
                     if doValid:
                         subImage.isValid = self.isValidMatrix(subMatrix)
 
@@ -1511,15 +1547,21 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         divideStep = [10] * 3
 
         bigImageData = logic.getImageData(volumeNode)
+        shape = bigImageData.GetDimensions()[::-1]
 
         startTime = time.time()
-        subImageDataList = logic.getSubImageList(bigImageData, divideStep, True)  # 0.5s
+        subImageDataList = logic.getSubImageList(bigImageData, divideStep, doValid=True)  # 0.5s
         print("--- getSubImageList uses %s seconds ---" % (time.time() - startTime))
+        isValidArrayList = [i.isValid for i in subImageDataList]
+        print np.sum(isValidArrayList)
 
-        # length = len(subImageDataList)
-        # rand = np.random.randint(0, length)
-        # subImage = subImageDataList[rand]
-        # print subImage.getImageInfo()
+        length = len(subImageDataList)
+        rand = np.random.randint(0, length)
+        subImage = subImageDataList[rand]
+        print subImage.getImageInfo()
+
+        neighbours = subImage.getNeighbours(shape)
+        print neighbours
         #
         # # Put a valid flag to items of subImageDataList
         # subImageArrayList = [i.getImageArray() for i in subImageDataList]
