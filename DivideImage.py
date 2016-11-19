@@ -21,6 +21,8 @@ import numpy as np
 import vtk
 from vtk.util import numpy_support
 from vtk.util import colors
+from vtk.util import vtkImageExportToArray
+from vtk.util import vtkImageImportFromArray
 # from vtk.util import vtkImageImportFromArray
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleWidget
@@ -293,7 +295,7 @@ class SubMedicalImage(object):
         """
         Get the indices of 6-neighbours for current position
         @param      shape: the shape of big matrix
-        Note: (i, j, k) starts at (0, 0, 0)
+        @return     a 6-item dict
         (i, j, k) -->
           Superior: (i-1, j, k)
           Inferior: (i+1, j, k)
@@ -301,6 +303,7 @@ class SubMedicalImage(object):
           Right:    (i, j+1, k)
           Anterior: (i, j, k-1)
           Posterior:(i, j, k+1)
+        Note: (i, j, k) starts at (0, 0, 0)
         """
         if not self.init:
             raise NameError("Sub-image is uninitialised.")
@@ -1006,8 +1009,15 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         bigMatrix = self.getNdarray(imageData)
         shape = bigMatrix.shape
 
-        extract = vtk.vtkExtractVOI()
-        extract.SetInputData(imageData)
+        spacing = imageData.GetSpacing()
+        origin = imageData.GetOrigin()
+
+        # Method 1: using `vtkExtractVOI`. A bit slower
+        # extract = vtk.vtkExtractVOI()
+        # extract.SetInputData(imageData)
+
+        # Method 2: using `vtkImageImportFromArray`
+        imageFromArray = vtkImageImportFromArray.vtkImageImportFromArray()
 
         subImage = SubMedicalImage()
         subImageList = []
@@ -1026,6 +1036,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                                           j:j + step[1],
                                           k:k + step[2]
                                           ]
+                    # NOTE: have a look of `subMatrix.flags`
+
                     # Record the index of subMatrix (VOI extent)
                     x, y, z = subMatrix.shape
                     voi = (i, i + x, j, j + y, k, k + z)
@@ -1033,9 +1045,22 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
                     # NOTE: the relationship between `voi` and `extent`
                     extent = (voi[4], voi[5] - 1, voi[2], voi[3] - 1, voi[0], voi[1] - 1)
-                    extract.SetVOI(extent)
-                    extract.Update()
-                    subImage.setImageData(extract.GetOutput())
+
+                    # Method 1: using `vtkExtractVOI`. It's a bit slower
+                    # extract.SetVOI(extent)
+                    # extract.Update()
+                    # subImage.setImageData(extract.GetOutput())
+
+                    # Method 2: using `vtkImageImportFromArray`
+                    subMatrix = subMatrix.copy(order='C')
+                    imageFromArray.SetArray(subMatrix)
+                    imageFromArray.SetDataExtent(extent)
+                    imageFromArray.SetDataSpacing(spacing)
+                    imageFromArray.SetDataOrigin(np.asarray(extent[0::2]) +
+                                                 np.asarray(origin))
+                    imageFromArray.Update()
+                    subImage.setImageData(imageFromArray.GetOutput())
+
                     subImage.setImageArray(subMatrix)
                     # if not subImage.isRightArray():
                     #     raise Exception("Not corresponding!")
@@ -1547,7 +1572,11 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         divideStep = [10] * 3
 
         bigImageData = logic.getImageData(volumeNode)
-        shape = bigImageData.GetDimensions()[::-1]
+        shape = bigImageData.GetDimensions()[::-1]  # NOTE: the order
+        print("Info of the bigImageData")
+        print("origin: " + str(bigImageData.GetOrigin()))
+        print("spacing: " + str(bigImageData.GetSpacing()))
+        print("extent: " + str(bigImageData.GetExtent()))
 
         startTime = time.time()
         subImageDataList = logic.getSubImageList(bigImageData, divideStep, doValid=True)  # 0.5s
@@ -1556,7 +1585,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         print np.sum(isValidArrayList)
 
         length = len(subImageDataList)
-        rand = np.random.randint(0, length)
+        # rand = np.random.randint(0, length)
+        rand = 1000
         subImage = subImageDataList[rand]
         print subImage.getImageInfo()
 
