@@ -1412,8 +1412,8 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test_Vtk(False)
         # self.test_VTKLogic()
         # self.test_implicitFunction()
-        # self.test_implicitFitting()
-        self.test_getSub()
+        self.test_implicitFitting()
+        # self.test_getSub()
         # self.test_Extract()
         # self.test_SubMedicalImage()
 
@@ -1784,9 +1784,18 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logging.debug("Vector of column:\n" + str(vectorColumn))
         fittingResult, spacing = logic.radialBasisFunc(vectorColumn, coords)
         logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
-        # print fittingResult.shape
+        print fittingResult.shape
+        print type(fittingResult)
+        print fittingResult.flags
 
-        imageData = logic.ndarray2vtkImageData(fittingResult, spacing=spacing)
+        # imageData = logic.ndarray2vtkImageData(fittingResult, spacing=spacing)
+
+        # TEST: using `vtkImageImportFromArray`
+        # fittingResult = fittingResult.copy(order='C')
+        imageFromArray = vtkImageImportFromArray.vtkImageImportFromArray()
+        imageFromArray.SetArray(fittingResult)
+        imageFromArray.Update()
+        imageData = imageFromArray.GetOutput()
 
         dims = imageData.GetDimensions()
         bounds = imageData.GetBounds()
@@ -1796,7 +1805,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         #
         # Start: VTK rendering
-        vtkLogic = DivideImageVTKLogic(False)
+        vtkLogic = DivideImageVTKLogic()
         # FIXME: the outside rendering has problem.
 
         implicitVolume = vtk.vtkImplicitVolume()
