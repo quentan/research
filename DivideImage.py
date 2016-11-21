@@ -948,6 +948,121 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
 
         iren.Start()
 
+    def getTransferFuncFromFile(self, color_file, opacity = 0.25):
+        """
+        Return transfer function from file for volume rendering
+        @param      a `cvs` file containing colours
+        @return1    func_color_transfor
+        @return2    func_opacity_scalar
+        @retrun3    func_opacity_gradient
+        """
+
+        import csv
+        fid = open(color_file, "r")
+        reader_color = csv.reader(fid)
+
+        dict_RGB = {}
+        for line in reader_color:
+            dict_RGB[int(line[0])] = [float(line[2]) / 255.0,
+                                      float(line[3]) / 255.0,
+                                      float(line[4]) / 255.0]
+        fid.close()
+
+        # Define colour transfer function
+        func_color_transfor = vtk.vtkColorTransferFunction()
+
+        for idx in dict_RGB.keys():
+            func_color_transfor.AddRGBPoint(idx,
+                                            dict_RGB[idx][0],
+                                            dict_RGB[idx][1],
+                                            dict_RGB[idx][2])
+
+        # Opacity transfer function
+        func_opacity_scalar = vtk.vtkPiecewiseFunction()
+
+        for idx in dict_RGB.keys():
+            func_opacity_scalar.AddPoint(idx, opacity if idx != 0 else 0.0)
+
+        # Opacity Gradient Transfer function
+        func_opacity_gradient = vtk.vtkPiecewiseFunction()
+        func_opacity_gradient.AddPoint(1, 0.0)
+        func_opacity_gradient.AddPoint(5, 0.1)
+        func_opacity_gradient.AddPoint(100, 1.0)
+
+        return func_color_transfor, func_opacity_scalar, func_opacity_gradient
+
+    def getPredefinedTransferFunc(self, pre_num=0):
+
+        """
+        Predefined transfer functions
+        pre_num:
+        0: bones
+        """
+
+        # Define colour transfer function
+        func_color_transfor = vtk.vtkColorTransferFunction()
+        func_opacity_scalar = vtk.vtkPiecewiseFunction()
+        func_opacity_gradient = vtk.vtkPiecewiseFunction()
+
+        if pre_num == 0:  # bones
+            func_color_transfor.AddRGBPoint(-500, 247.0 / 255, 150.0 / 255, 155.0 / 255)
+            func_color_transfor.AddRGBPoint(0, 247.0 / 255, 150.0 / 255, 155.0 / 255)
+            func_color_transfor.AddRGBPoint(500, 255.0 / 255, 255.0 / 255, 230.0 / 255)
+
+            func_opacity_scalar.AddPoint(-500, 0.15)
+            func_opacity_scalar.AddPoint(0, 0.15)
+            func_opacity_scalar.AddPoint(500, 0.9)
+
+            func_opacity_gradient.AddPoint(0, 0.0)
+            func_opacity_gradient.AddPoint(90, 0.5)
+            func_opacity_gradient.AddPoint(100, 1.0)
+
+        elif pre_num == 1:  # For the CTK skull
+            func_color_transfor.AddRGBPoint(0.0, 0.5, 0.0, 0.0)
+            func_color_transfor.AddRGBPoint(600.0, 1.0, 0.5, 0.5)
+            func_color_transfor.AddRGBPoint(1280.0, 0.9, 0.2, 0.3)
+            func_color_transfor.AddRGBPoint(1960.0, 0.81, 0.27, 0.1)
+            func_color_transfor.AddRGBPoint(4095.0, 0.5, 0.5, 0.5)
+
+            func_opacity_scalar.AddPoint(70.0, 0.0)
+            func_opacity_scalar.AddPoint(599.0, 0)
+            func_opacity_scalar.AddPoint(600.0, 0)
+            func_opacity_scalar.AddPoint(1195.0, 0)
+            func_opacity_scalar.AddPoint(1200, .2)
+            func_opacity_scalar.AddPoint(1300, .3)
+            func_opacity_scalar.AddPoint(2000, .3)
+            func_opacity_scalar.AddPoint(4095.0, 1.0)
+
+            func_opacity_gradient.AddPoint(0, 0.0)
+            func_opacity_gradient.AddPoint(90, 0.5)
+            func_opacity_gradient.AddPoint(100, 1.0)
+
+        return func_color_transfor, func_opacity_scalar, func_opacity_gradient
+
+    def getVolumeActor(self, vtk_source, volume_prop, mapper_type=0):
+        """
+        :return: a vtkVolume
+        """
+
+        if mapper_type == 0:
+            mapper_volume = vtk.vtkGPUVolumeRayCastMapper()
+        elif mapper_type == 1:
+            mapper_volume = vtk.vtkVolumeTextureMapper()
+        elif mapper_type == 2:
+            mapper_volume = vtk.vtkFixedPointVolumeRayCastMapper()
+        elif mapper_type == 3:
+            mapper_volume = vtk.vtkSmartVolumeMapper()
+            mapper_volume.SetRequestedRenderMode(0)  # 0: DefaultRenderMode
+
+        # mapper_volume.SetInputConnection(vtk_source.GetOutputPort())
+        mapper_volume.SetInputData(vtk_source)
+
+        actor_volume = vtk.vtkVolume()
+        actor_volume.SetMapper(mapper_volume)
+        actor_volume.SetProperty(volume_prop)
+
+        return actor_volume
+
 
 #
 # Logic
@@ -1054,12 +1169,18 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     # Method 2: using `vtkImageImportFromArray`
                     subMatrix = subMatrix.copy(order='C')
                     imageFromArray.SetArray(subMatrix)
-                    imageFromArray.SetDataExtent(extent)
+                    # imageFromArray.SetDataExtent(extent)
+                    # imageFromArray.SetWholeExtent(0, z - 1, 0, y - 1, 0, x - 1)
                     imageFromArray.SetDataSpacing(spacing)
                     imageFromArray.SetDataOrigin(np.asarray(extent[0::2]) +
                                                  np.asarray(origin))
                     imageFromArray.Update()
-                    subImage.setImageData(imageFromArray.GetOutput())
+                    subImageData = imageFromArray.GetOutput()
+                    subImageData.SetExtent(extent)
+
+                    subImage = SubMedicalImage()
+                    # subImage.setImageData(imageFromArray.GetOutput())
+                    subImage.setImageData(subImageData)
 
                     subImage.setImageArray(subMatrix)
                     # if not subImage.isRightArray():
@@ -1075,6 +1196,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                         subImage.isValid = self.isValidMatrix(subMatrix)
 
                     subImageList.append(copy.copy(subImage))
+
+                    if sn % 1000 == 0:
+                        print subImageList[sn].getImageData().GetExtent()
 
                     sn += 1
 
@@ -1412,10 +1536,11 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test_Vtk(False)
         # self.test_VTKLogic()
         # self.test_implicitFunction()
-        self.test_implicitFitting()
-        # self.test_getSub()
+        # self.test_implicitFitting()
+        self.test_getSub()
         # self.test_Extract()
         # self.test_SubMedicalImage()
+        # self.test_SubVolumeRendering()
 
     def getDataFromURL(self):
         """
@@ -1585,13 +1710,28 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         print np.sum(isValidArrayList)
 
         length = len(subImageDataList)
-        # rand = np.random.randint(0, length)
-        rand = 1000
+        rand = np.random.randint(0, length)
+        # rand = 1000
         subImage = subImageDataList[rand]
         print subImage.getImageInfo()
 
         neighbours = subImage.getNeighbours(shape)
         print neighbours
+
+        # Compare `vtkImageExportToArray` and `numpy_support`
+        shape = list(bigImageData.GetDimensions())
+        shape.reverse()
+        ndarray = vtk.util.numpy_support.vtk_to_numpy(bigImageData.GetPointData(
+                  ).GetScalars()).reshape(shape)
+
+        imageExportArray = vtkImageExportToArray.vtkImageExportToArray()
+        imageExportArray.SetInputData(bigImageData)
+        ndarray2 = imageExportArray.GetArray()
+
+        print ndarray.shape
+        print ndarray2.shape
+        print np.array_equal(ndarray, ndarray2)
+
         #
         # # Put a valid flag to items of subImageDataList
         # subImageArrayList = [i.getImageArray() for i in subImageDataList]
@@ -1755,6 +1895,19 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # volumeNode = slicer.util.getNode(pattern="MR-head")
         # self.delayDisplay("Image loaded from: " + filepath)
 
+        # ----------------------------------
+        # Read data from file
+        text_file = "/tmp/patella.txt"
+        # text_file = "../data/ear.txt"
+        # text_file = "../data/torus.txt"
+        # text_file = "../head.txt"
+        # text_file = "../tibia.txt"
+        # text_file = "/tmp/coords.txt"
+
+        # Load data from plain text file
+        data = np.loadtxt(text_file)
+        # ====================================
+
         volumeNode = self.getDataFromURL()
 
         moduleWidget = slicer.modules.DivideImageWidget
@@ -1780,9 +1933,11 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logging.info("Random subMatix " + str(testValidMatrix) + " has " +
                      str(len(coords)) + " valid points")
 
-        vectorColumn = logic.implicitFitting(coords)
+        # vectorColumn = logic.implicitFitting(coords)
+        vectorColumn = logic.implicitFitting(data)
         logging.debug("Vector of column:\n" + str(vectorColumn))
-        fittingResult, spacing = logic.radialBasisFunc(vectorColumn, coords)
+        # fittingResult, spacing = logic.radialBasisFunc(vectorColumn, coords)
+        fittingResult, spacing = logic.radialBasisFunc(vectorColumn, data)
         logging.debug("Fitting Result as matrix:\n" + str(fittingResult))
         print fittingResult.shape
         print type(fittingResult)
@@ -1802,6 +1957,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         logging.debug("Bounds of the sub image: " + str(bounds))
         # spacing = imageData.GetSpacing()
         # origin = imageData.GetOrigin()
+
 
         #
         # Start: VTK rendering
@@ -1961,3 +2117,60 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         # subImage = SubMedicalImage()
         subImage.renderPolyData()
+
+    def test_SubVolumeRendering(self):
+
+        # filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
+        # slicer.util.loadVolume(filepath)
+        # volumeNode = slicer.util.getNode(pattern="MR-head")
+        # self.delayDisplay("Image loaded from: " + filepath)
+
+        volumeNode = self.getDataFromURL()
+        moduleWidget = slicer.modules.DivideImageWidget
+        moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
+
+        logic = DivideImageLogic()
+        # divideStep = [22, 33, 44]
+        divideStep = [10] * 3
+
+        bigImageData = logic.getImageData(volumeNode)
+        print("Info of the bigImageData")
+        print("  origin: " + str(bigImageData.GetOrigin()))
+        print("  spacing: " + str(bigImageData.GetSpacing()))
+        print("  extent: " + str(bigImageData.GetExtent()))
+
+        subImageDataList = logic.getSubImageList(bigImageData, divideStep, doValid=False)  # 0.5s
+
+        length = len(subImageDataList)
+        rand = np.random.randint(0, length)
+        print("random number: " + str(rand))
+        # rand = 1000
+        subImage = subImageDataList[rand]
+        print subImage.getImageInfo()
+        subImageData = subImage.getImageData()
+        print("Info of the subImageData")
+        print("  origin: " + str(subImageData.GetOrigin()))
+        print("  spacing: " + str(subImageData.GetSpacing()))
+        print("  extent: " + str(subImageData.GetExtent()))
+
+        # VTK rendering
+        vtkLogic = DivideImageVTKLogic()
+        # colorFile = "/tmp/colorfile.cvs"
+        # transFunc = vtkLogic.getTransferFuncFromFile(colorFile)
+        transFunc = vtkLogic.getPredefinedTransferFunc()
+
+        prop_volume = vtk.vtkVolumeProperty()
+        prop_volume.ShadeOff()
+        prop_volume.SetColor(transFunc[0])
+        prop_volume.SetScalarOpacity(transFunc[1])
+        prop_volume.SetGradientOpacity(transFunc[2])
+        prop_volume.SetInterpolationTypeToLinear()
+        prop_volume.SetAmbient(0.4)
+        prop_volume.SetDiffuse(0.6)
+        prop_volume.SetSpecular(0.2)
+
+        actor = vtkLogic.getVolumeActor(subImageData, prop_volume)
+
+        vtkLogic.addActor(actor)
+
+        vtkLogic.vtkShow()
