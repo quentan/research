@@ -16,7 +16,7 @@ import slicer
 import ctk
 import numpy as np
 # from multiprocessing import Pool
-# from multiprocessing.dummy import Pool as ThreadPool
+from multiprocessing.dummy import Pool as ThreadPool
 
 import vtk
 from vtk.util import numpy_support
@@ -110,7 +110,7 @@ class SubMedicalImage(object):
         self._isValid = False
         self.dims = (l, w, h)
         self.shape = (h, w, l)  # for NumPy
-        self.extent = (0, 1) * 3
+        self._extent = (0, 1) * 3
 
     def __del__(self):
         del self.imageData
@@ -118,6 +118,19 @@ class SubMedicalImage(object):
     #
     # Getter & Setter
     #
+
+    def getBigImage(self, bigImage):
+        """
+        Store a copy of the original medical image
+        """
+        if bigImage is None:
+            raise TypeError("No image data is given")
+
+        if not isinstance(bigImage, vtk.vtkImageData):
+            raise TypeError("a vtkImageData is required")
+
+        # TODO: try deepcopy and ShallowCopy later
+        self._bigImage = bigImage
 
     def setImageData(self, imageData):
         """
@@ -265,6 +278,20 @@ class SubMedicalImage(object):
 
         self._index = index
 
+    # -----------------------------------------------------------------------
+
+    @property
+    def extent(self):
+        return self._voi
+
+    @extent.setter
+    def extent(self, extent):
+        if len(extent) != 6:
+            raise TypeError("extent is a 6-item list")
+        if not [isinstance(i, int) for i in extent]:
+            raise TypeError("extent needs integer number")
+
+        self._extent = extent
     # -----------------------------------------------------------------------
 
     @property
@@ -1082,6 +1109,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         if self.hasImageData(volumeNode):
             imageData = volumeNode.GetImageData()
             logging.debug("vtkImageData of the volume: " + str(imageData))
+            self.imageData = imageData
             return imageData
         else:
             raise IOError("Error: Failed to get ImageData!")
@@ -1112,6 +1140,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
     def getSubImageList(self, imageData, step=[40] * 3, doValid=False):
         """
+        NOTE: This method would be depricated for it cann remain the intermediate result.
         This method should replace many other similar methods.
         Generate a list of sub-`vtkImageData` containing `sn`, `index` and `voi`
         input:
@@ -1258,6 +1287,18 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     extent = (voi[4], voi[5] - 1, voi[2], voi[3] - 1, voi[0], voi[1] - 1)
 
                     yield index, voi, extent
+
+    def getSubImage(self, extent):
+        """
+        Extract sub-image by the given extent
+        """
+        imageData = self.imageData
+        extract = vtk.vtkExtractVOI()
+        extract.SetInputData(imageData)
+        extract.SetVOI(extent)
+        extract.Update()
+
+        return extract.GetOutput()
 
     def getValidSubMatrices(self, volumeNode, step=[40] * 3):
         """
@@ -1758,9 +1799,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         print("spacing: " + str(bigImageData.GetSpacing()))
         print("extent: " + str(bigImageData.GetExtent()))
 
-        startTime = time.time()
         subImageDataList = logic.getSubImageList(bigImageData, divideStep, doValid=True)  # 0.5s
-        print("--- getSubImageList uses %s seconds ---" % (time.time() - startTime))
         isValidArrayList = [i.isValid for i in subImageDataList]
         print np.sum(isValidArrayList)
 
@@ -1768,23 +1807,40 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         index = []
         voi = []
         extent = []
-        for i in logic.getSubImageInfo(bigImageData):
+        startTime = time.time()
+        for i in logic.getSubImageInfo(bigImageData, divideStep):
             index.append((i[0]))
             voi.append(i[1])
             extent.append(i[2])
+        logging.info("--- getSubImageInfo uses %s seconds ---" % (time.time() - startTime))
 
         index = tuple(index)
         voi = tuple(voi)
         extent = tuple(extent)
 
-        print voi[index.index((0, 0, 0))]
-        # print index.index((0, 0, 1))
+        # Get sub-image
+        startTime = time.time()
+        # Method 1: loop (1.409s)
+        r = []
+        for i in extent:
+            t = logic.getSubImage(i)
+            r.append(t)
+        # Method 2: map (1.363s)
+        # r = map(logic.getSubImage, extent)
+        # Method 3: multiprocessing (1.572s)
+        # pool = ThreadPool()
+        # r = pool.map(logic.getSubImage, extent)
+        # pool.close()
+        # pool.join()
+        logging.info("--- getSubImage uses %s seconds ---" % (time.time() - startTime))
 
-
-        # length = len(subImageDataList)
-        # rand = np.random.randint(0, length)
-        # # rand = 1000
-        # subImage = subImageDataList[rand]
+        subImageDataList = list(r)
+        length = len(subImageDataList)
+        rand = np.random.randint(0, length)
+        print rand
+        # rand = 1000
+        subImage = subImageDataList[rand]
+        print subImage
         # print subImage.getImageInfo()
         #
         # neighbours = subImage.getNeighbours(shape)
