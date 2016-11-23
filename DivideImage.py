@@ -1195,14 +1195,69 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     if doValid:
                         subImage.isValid = self.isValidMatrix(subMatrix)
 
+                    # FIXME: This does not work as `copy.copy()` cannot work for list in list
                     subImageList.append(copy.copy(subImage))
 
-                    if sn % 1000 == 0:
-                        print subImageList[sn].getImageData().GetExtent()
+                    # if sn % 1000 == 0:
+                    #     print subImageList[sn].getImageData().GetExtent()
 
                     sn += 1
 
         return subImageList
+
+    def getSubImageInfo(self, imageData, step=[40] * 3):
+        """
+        Get `index`, `voi` and `extent` of every sub-image by the divde step.
+        They share a same index.
+        No real image is retrieved.
+        Usage:
+            ```
+            index = []
+            voi = []
+            extent = []
+            for i in logic.getSubImageInfo(bigImageData):
+                index.append((i[0]))
+                voi.append(i[1])
+                extent.append(i[2])
+
+            index = tuple(index)
+            voi = tuple(voi)
+            extent = tuple(extent)
+            ```
+        input:
+            @imageData:     big `vtkImageData`
+            @step:
+        output:
+            @return:        a tuple of `index`, `voi` and `extent`
+        """
+        # TODO: parallelise the loops for acceleration
+        bigMatrix = self.getNdarray(imageData)
+        shape = bigMatrix.shape
+
+        ii = 0  # index of subMatrix
+        for i in range(0, shape[0], step[0]):
+            ii += 1
+            jj = 0
+            for j in range(0, shape[1], step[1]):
+                jj += 1
+                kk = 0
+                for k in range(0, shape[2], step[2]):
+                    kk += 1
+                    subMatrix = bigMatrix[i:i + step[0],
+                                          j:j + step[1],
+                                          k:k + step[2]
+                                          ]
+                    # NOTE: have a look of `subMatrix.flags`
+
+                    # Record the index of subMatrix (VOI extent)
+                    x, y, z = subMatrix.shape
+                    voi = (i, i + x, j, j + y, k, k + z)
+                    index = (ii - 1, jj - 1, kk - 1)
+
+                    # NOTE: the relationship between `voi` and `extent`
+                    extent = (voi[4], voi[5] - 1, voi[2], voi[3] - 1, voi[0], voi[1] - 1)
+
+                    yield index, voi, extent
 
     def getValidSubMatrices(self, volumeNode, step=[40] * 3):
         """
@@ -1709,28 +1764,45 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         isValidArrayList = [i.isValid for i in subImageDataList]
         print np.sum(isValidArrayList)
 
-        length = len(subImageDataList)
-        rand = np.random.randint(0, length)
-        # rand = 1000
-        subImage = subImageDataList[rand]
-        print subImage.getImageInfo()
+        # Test `getSubImageInfo`
+        index = []
+        voi = []
+        extent = []
+        for i in logic.getSubImageInfo(bigImageData):
+            index.append((i[0]))
+            voi.append(i[1])
+            extent.append(i[2])
 
-        neighbours = subImage.getNeighbours(shape)
-        print neighbours
+        index = tuple(index)
+        voi = tuple(voi)
+        extent = tuple(extent)
 
-        # Compare `vtkImageExportToArray` and `numpy_support`
-        shape = list(bigImageData.GetDimensions())
-        shape.reverse()
-        ndarray = vtk.util.numpy_support.vtk_to_numpy(bigImageData.GetPointData(
-                  ).GetScalars()).reshape(shape)
+        print voi[index.index((0, 0, 0))]
+        # print index.index((0, 0, 1))
 
-        imageExportArray = vtkImageExportToArray.vtkImageExportToArray()
-        imageExportArray.SetInputData(bigImageData)
-        ndarray2 = imageExportArray.GetArray()
 
-        print ndarray.shape
-        print ndarray2.shape
-        print np.array_equal(ndarray, ndarray2)
+        # length = len(subImageDataList)
+        # rand = np.random.randint(0, length)
+        # # rand = 1000
+        # subImage = subImageDataList[rand]
+        # print subImage.getImageInfo()
+        #
+        # neighbours = subImage.getNeighbours(shape)
+        # print neighbours
+        #
+        # # Compare `vtkImageExportToArray` and `numpy_support`
+        # shape = list(bigImageData.GetDimensions())
+        # shape.reverse()
+        # ndarray = vtk.util.numpy_support.vtk_to_numpy(bigImageData.GetPointData(
+        #           ).GetScalars()).reshape(shape)
+        #
+        # imageExportArray = vtkImageExportToArray.vtkImageExportToArray()
+        # imageExportArray.SetInputData(bigImageData)
+        # ndarray2 = imageExportArray.GetArray()
+        #
+        # print ndarray.shape
+        # print ndarray2.shape
+        # print np.array_equal(ndarray, ndarray2)
 
         #
         # # Put a valid flag to items of subImageDataList
