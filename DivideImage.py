@@ -1236,8 +1236,11 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
     def getSubImageInfo(self, imageData, step=[40] * 3):
         """
-        Get `index`, `voi` and `extent` of every sub-image by the divde step.
-        They share a same index.
+        Get `extent` of every sub-image by the divde step.
+        `index` and `voi` can be calculated with:
+        Denote extent as e, then
+            index = (e4/10, e2/10, e0/10)
+            voi = (e4, e5+1, e2, e3+1, e0, e1+1)
         No real image is retrieved.
         Usage:
             ```
@@ -1257,7 +1260,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             @imageData:     big `vtkImageData`
             @step:
         output:
-            @return:        a tuple of `index`, `voi` and `extent`
+            @yield:         <tuple> `extent`
         """
         # TODO: parallelise the loops for acceleration
         bigMatrix = self.getNdarray(imageData)
@@ -1281,12 +1284,12 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     # Record the index of subMatrix (VOI extent)
                     x, y, z = subMatrix.shape
                     voi = (i, i + x, j, j + y, k, k + z)
-                    index = (ii - 1, jj - 1, kk - 1)
+                    # index = (ii - 1, jj - 1, kk - 1)
 
                     # NOTE: the relationship between `voi` and `extent`
                     extent = (voi[4], voi[5] - 1, voi[2], voi[3] - 1, voi[0], voi[1] - 1)
 
-                    yield index, voi, extent
+                    yield extent
 
     def getSubImage(self, extent):
         """
@@ -1298,7 +1301,22 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         extract.SetVOI(extent)
         extract.Update()
 
-        return extract.GetOutput()
+        subImage = extract.GetOutput()
+
+        i, j, k = (extent[4] / 10, extent[2] / 10, extent[0] / 10)  # index
+        ix, jx, kx = imageData.GetDimensions()[::-1]  # shape
+        superior = (None if i == 0 else i - 1, j, k)
+        inferior = (None if i == ix else i + 1, j, k)
+        left = (i, None if j == 0 else j - 1, k)
+        right = (i, None if j == jx else j + 1, k)
+        anterior = (i, j, None if k == 0 else k - 1)
+        posterior = (i, j, None if k == kx else k + 1)
+        neighbours = (superior, inferior, left, right, anterior, posterior)
+
+        subImage.index = i, j, k
+        subImage.neighbours = neighbours
+
+        return subImage
 
     def getValidSubMatrices(self, volumeNode, step=[40] * 3):
         """
@@ -1804,29 +1822,23 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         print np.sum(isValidArrayList)
 
         # Test `getSubImageInfo`
-        index = []
-        voi = []
         extent = []
         startTime = time.time()
         for i in logic.getSubImageInfo(bigImageData, divideStep):
-            index.append((i[0]))
-            voi.append(i[1])
-            extent.append(i[2])
+            extent.append(i)
         logging.info("--- getSubImageInfo uses %s seconds ---" % (time.time() - startTime))
 
-        index = tuple(index)
-        voi = tuple(voi)
         extent = tuple(extent)
 
         # Get sub-image
         startTime = time.time()
         # Method 1: loop (1.409s)
-        r = []
-        for i in extent:
-            t = logic.getSubImage(i)
-            r.append(t)
+        # r = []
+        # for i in extent:
+        #     t = logic.getSubImage(i)
+        #     r.append(t)
         # Method 2: map (1.363s)
-        # r = map(logic.getSubImage, extent)
+        r = map(logic.getSubImage, extent)
         # Method 3: multiprocessing (1.572s)
         # pool = ThreadPool()
         # r = pool.map(logic.getSubImage, extent)
@@ -1838,8 +1850,11 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         length = len(subImageDataList)
         rand = np.random.randint(0, length)
         print rand
+        print extent[rand]
         # rand = 1000
         subImage = subImageDataList[rand]
+        print subImage.index
+        print subImage.neighbours
         print subImage
         # print subImage.getImageInfo()
         #
