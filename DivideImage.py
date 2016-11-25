@@ -8,6 +8,7 @@
 
 import os
 import copy
+import functools
 # import sys
 import time
 import urllib
@@ -1234,31 +1235,28 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         return subImageList
 
-    def getSubImageInfo(self, imageData, step=[40] * 3):
+    def getSubImageInfo(self, imageData, step=[40] * 3, overlap=[0] * 3):
         """
-        Get `extent` of every sub-image by the divde step.
-        `index` and `voi` can be calculated with:
+        Get `extent` and `index` of every sub-image by the divde step.
+        The first 6 items are extent, the other 3 are index
+        `voi` can be calculated with:
         Denote extent as e, then
-            index = (e4/10, e2/10, e0/10)
             voi = (e4, e5+1, e2, e3+1, e0, e1+1)
         No real image is retrieved.
         Usage:
             ```
-            index = []
-            voi = []
-            extent = []
+            extentIndex = []
             for i in logic.getSubImageInfo(bigImageData):
-                index.append((i[0]))
-                voi.append(i[1])
-                extent.append(i[2])
+                extentIndex.append(i)
 
-            index = tuple(index)
-            voi = tuple(voi)
-            extent = tuple(extent)
+            extent = tuple(extentIndex[:, :6])
+            index = tuple(extentIndex[:, 6::])
+
             ```
         input:
             @imageData:     big `vtkImageData`
             @step:
+            @overlap
         output:
             @yield:         <tuple> `extent`
         """
@@ -1270,11 +1268,14 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         for i in range(0, shape[0], step[0]):
             ii += 1
             jj = 0
+            i = i - overlap[0] if i > 0 else i
             for j in range(0, shape[1], step[1]):
                 jj += 1
                 kk = 0
+                j = j - overlap[1] if j > 0 else j
                 for k in range(0, shape[2], step[2]):
                     kk += 1
+                    k = k - overlap[2] if k > 0 else k
                     subMatrix = bigMatrix[i:i + step[0],
                                           j:j + step[1],
                                           k:k + step[2]
@@ -1284,17 +1285,24 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     # Record the index of subMatrix (VOI extent)
                     x, y, z = subMatrix.shape
                     voi = (i, i + x, j, j + y, k, k + z)
-                    # index = (ii - 1, jj - 1, kk - 1)
+                    index = (ii - 1, jj - 1, kk - 1)
+                    # logging.info("index: {}".format(index))
 
                     # NOTE: the relationship between `voi` and `extent`
                     extent = (voi[4], voi[5] - 1, voi[2], voi[3] - 1, voi[0], voi[1] - 1)
+                    # logging.info("extent: {}".format(extent))
 
-                    yield extent
+                    yield extent + index
 
-    def getSubImage(self, extent):
+    def getSubImage(self, extentIndex):
         """
-        Extract sub-image by the given extent
+        Extract sub-image by the given extent and index.
+        index is optional for extraction.
         """
+        # extentIndex = np.asarray(extentIndex)
+        if len(extentIndex) != 9:
+            raise TypeError("extentIndex has 9 items.")
+        extent = extentIndex[:6]
         imageData = self.imageData
         extract = vtk.vtkExtractVOI()
         extract.SetInputData(imageData)
@@ -1303,8 +1311,9 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         subImage = extract.GetOutput()
 
-        i, j, k = (extent[4] / 10, extent[2] / 10, extent[0] / 10)  # index
-        ix, jx, kx = imageData.GetDimensions()[::-1]  # shape
+        # print extentIndex
+        i, j, k = (extentIndex[6:])
+        ix, jx, kx = imageData.GetDimensions()[::-1]  # shape of bigImage
         superior = (None if i == 0 else i - 1, j, k)
         inferior = (None if i == ix else i + 1, j, k)
         left = (i, None if j == 0 else j - 1, k)
@@ -1812,6 +1821,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         bigImageData = logic.getImageData(volumeNode)
         shape = bigImageData.GetDimensions()[::-1]  # NOTE: the order
+        # divideStep = np.asarray(shape) / 10
         print("Info of the bigImageData")
         print("origin: " + str(bigImageData.GetOrigin()))
         print("spacing: " + str(bigImageData.GetSpacing()))
@@ -1822,13 +1832,18 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         print np.sum(isValidArrayList)
 
         # Test `getSubImageInfo`
-        extent = []
+        extentIndex = []
         startTime = time.time()
         for i in logic.getSubImageInfo(bigImageData, divideStep):
-            extent.append(i)
+            extentIndex.append(i)
         logging.info("--- getSubImageInfo uses %s seconds ---" % (time.time() - startTime))
 
-        extent = tuple(extent)
+        print len(extentIndex)
+        extent = tuple(extentIndex[:][:6])  # note the grammar. It is tuple, not numpy
+        index = tuple(extentIndex[:][6:])
+        print len(extent)
+        extent = np.asarray(extentIndex)[:, :6]
+        index = np.asarray(extentIndex)[:, 6:]
 
         # Get sub-image
         startTime = time.time()
@@ -1838,7 +1853,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         #     t = logic.getSubImage(i)
         #     r.append(t)
         # Method 2: map (1.363s)
-        r = map(logic.getSubImage, extent)
+        r = map(logic.getSubImage, extentIndex)
         # Method 3: multiprocessing (1.572s)
         # pool = ThreadPool()
         # r = pool.map(logic.getSubImage, extent)
@@ -1848,14 +1863,15 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         subImageDataList = list(r)
         length = len(subImageDataList)
+        print("length: {}".format(length))
         rand = np.random.randint(0, length)
-        print rand
-        print extent[rand]
+        print("random number: {}".format(rand))
+        print("extent: {}".format(extent[rand]))
         # rand = 1000
         subImage = subImageDataList[rand]
-        print subImage.index
-        print subImage.neighbours
-        print subImage
+        print("index: {}".format(subImage.index))
+        print("neighbours: {}".format(subImage.neighbours))
+        # print subImage
         # print subImage.getImageInfo()
         #
         # neighbours = subImage.getNeighbours(shape)
