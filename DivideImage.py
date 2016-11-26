@@ -1139,106 +1139,10 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         return ndarray
 
-    def getSubImageList(self, imageData, step=[40] * 3, doValid=False):
+    def _getSubImageInfo(self, imageData, step=[40] * 3, overlap=[0] * 3):
         """
-        NOTE: This method would be depricated for it cann remain the intermediate result.
-        This method should replace many other similar methods.
-        Generate a list of sub-`vtkImageData` containing `sn`, `index` and `voi`
-        input:
-            @imageData:     big `vtkImageData`
-            @step:
-        output:
-            @return:        <type list> a list of SubMedicalImage objects
-        """
-        # TODO: parallelise the loops for acceleration
-        bigMatrix = self.getNdarray(imageData)
-        shape = bigMatrix.shape
-
-        spacing = imageData.GetSpacing()
-        origin = imageData.GetOrigin()
-
-        # Method 1: using `vtkExtractVOI`. A bit slower
-        # extract = vtk.vtkExtractVOI()
-        # extract.SetInputData(imageData)
-
-        # Method 2: using `vtkImageImportFromArray`
-        imageFromArray = vtkImageImportFromArray.vtkImageImportFromArray()
-
-        subImage = SubMedicalImage()
-        subImageList = []
-
-        sn = 0
-        ii = 0  # index of subMatrix
-        for i in range(0, shape[0], step[0]):
-            ii += 1
-            jj = 0
-            for j in range(0, shape[1], step[1]):
-                jj += 1
-                kk = 0
-                for k in range(0, shape[2], step[2]):
-                    kk += 1
-                    subMatrix = bigMatrix[i:i + step[0],
-                                          j:j + step[1],
-                                          k:k + step[2]
-                                          ]
-                    # NOTE: have a look of `subMatrix.flags`
-
-                    # Record the index of subMatrix (VOI extent)
-                    x, y, z = subMatrix.shape
-                    voi = (i, i + x, j, j + y, k, k + z)
-                    index = (ii - 1, jj - 1, kk - 1)
-
-                    # NOTE: the relationship between `voi` and `extent`
-                    extent = (voi[4], voi[5] - 1, voi[2], voi[3] - 1, voi[0], voi[1] - 1)
-
-                    # Method 1: using `vtkExtractVOI`. It's a bit slower
-                    # extract.SetVOI(extent)
-                    # extract.Update()
-                    # subImage.setImageData(extract.GetOutput())
-
-                    # Method 2: using `vtkImageImportFromArray`
-                    subMatrix = subMatrix.copy(order='C')
-                    imageFromArray.SetArray(subMatrix)
-                    # imageFromArray.SetDataExtent(extent)
-                    # imageFromArray.SetWholeExtent(0, z - 1, 0, y - 1, 0, x - 1)
-                    imageFromArray.SetDataSpacing(spacing)
-                    imageFromArray.SetDataOrigin(np.asarray(extent[0::2]) +
-                                                 np.asarray(origin))
-                    imageFromArray.Update()
-                    subImageData = imageFromArray.GetOutput()
-                    subImageData.SetExtent(extent)
-
-                    subImage = SubMedicalImage()
-                    # subImage.setImageData(imageFromArray.GetOutput())
-                    subImage.setImageData(subImageData)
-
-                    subImage.setImageArray(subMatrix)
-                    # if not subImage.isRightArray():
-                    #     raise Exception("Not corresponding!")
-                    subImage.init = True
-                    subImage.sn = sn
-                    subImage.voi = voi
-                    subImage.index = index
-
-                    subImage.originalShape = shape  # keep a record of the original medical
-
-                    if doValid:
-                        subImage.isValid = self.isValidMatrix(subMatrix)
-
-                    # FIXME: This does not work as `copy.copy()` cannot work for list in list
-                    subImageList.append(copy.copy(subImage))
-
-                    # if sn % 1000 == 0:
-                    #     print subImageList[sn].getImageData().GetExtent()
-
-                    sn += 1
-
-        return subImageList
-
-    def getSubImageInfo(self, imageData, step=[40] * 3, overlap=[0] * 3):
-        """
-        Get `extent` and `index` of every sub-image by the divde step.
-        The first 6 items are extent, the other 3 are index
+        Get `extent`, `index` and `sn` of every sub-image by the divde step.
+        The first 6 items are `extent`, the last one is `sn`, the other 3 are `index`
         `voi` can be calculated with:
         Denote extent as e, then
             voi = (e4, e5+1, e2, e3+1, e0, e1+1)
@@ -1251,6 +1155,7 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
             extent = tuple(extentIndex[:, :6])
             index = tuple(extentIndex[:, 6::])
+            sn = tuple
 
             ```
         input:
@@ -1258,12 +1163,13 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
             @step:
             @overlap
         output:
-            @yield:         <tuple> `extent`
+            @yield:         10-item <tuple> `extent`, `index` and `sn`
         """
         # TODO: parallelise the loops for acceleration
         bigMatrix = self.getNdarray(imageData)
         shape = bigMatrix.shape
 
+        sn = 0
         ii = 0  # index of subMatrix
         for i in range(0, shape[0], step[0]):
             ii += 1
@@ -1292,27 +1198,30 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
                     extent = (voi[4], voi[5] - 1, voi[2], voi[3] - 1, voi[0], voi[1] - 1)
                     # logging.info("extent: {}".format(extent))
 
-                    yield extent + index
+                    yield extent + index + (sn,)
+                    sn = sn + 1
 
-    def getSubImage(self, extentIndex):
+    def _getSubImage(self, extentIndexSn):
         """
         Extract sub-image by the given extent and index.
-        index is optional for extraction.
+        bigImage is retrieved by `self.imageData`
+        @param      extentIndex: a 9-item tuple, first 6 are extent, last 3 are index
+        @return     ONE sub-`vtkImageData` with `index` and `neighbours` properties
         """
-        # extentIndex = np.asarray(extentIndex)
-        if len(extentIndex) != 9:
-            raise TypeError("extentIndex has 9 items.")
-        extent = extentIndex[:6]
+
+        if len(extentIndexSn) != 10:
+            raise TypeError("extentIndex has 10 items.")
+
+        extent = extentIndexSn[:6]
         imageData = self.imageData
         extract = vtk.vtkExtractVOI()
         extract.SetInputData(imageData)
         extract.SetVOI(extent)
         extract.Update()
-
         subImage = extract.GetOutput()
 
-        # print extentIndex
-        i, j, k = (extentIndex[6:])
+        # Get its neighbours by the given `index`
+        i, j, k = (extentIndexSn[6:-1])  # index
         ix, jx, kx = imageData.GetDimensions()[::-1]  # shape of bigImage
         superior = (None if i == 0 else i - 1, j, k)
         inferior = (None if i == ix else i + 1, j, k)
@@ -1324,8 +1233,27 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
 
         subImage.index = i, j, k
         subImage.neighbours = neighbours
+        subImage.sn = extentIndexSn[-1]
 
-        return subImage
+        return subImage  # still `vtkImageData`, but attached `index`, `neighbours` and `sn`
+
+    def getSubImageList(self, bigImageData, step=[40] * 3, overlap=[0] * 3):
+        """
+        Retrieve a tuple of sub-`vtkImageData` with `index`, `neighbours` and `sn` attached
+        """
+
+        extentIndexSn = []
+        startTime = time.time()
+        for i in self._getSubImageInfo(bigImageData, step, overlap):
+            extentIndexSn.append(i)
+        logging.debug("--- getSubImageInfo uses %s seconds ---" % (time.time() - startTime))
+
+        # Get sub-image
+        startTime = time.time()
+        r = map(self._getSubImage, extentIndexSn)
+        logging.debug("--- getSubImage uses %s seconds ---" % (time.time() - startTime))
+
+        return tuple(r)
 
     def getValidSubMatrices(self, volumeNode, step=[40] * 3):
         """
@@ -1827,50 +1755,21 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         print("spacing: " + str(bigImageData.GetSpacing()))
         print("extent: " + str(bigImageData.GetExtent()))
 
-        subImageDataList = logic.getSubImageList(bigImageData, divideStep, doValid=True)  # 0.5s
-        isValidArrayList = [i.isValid for i in subImageDataList]
-        print np.sum(isValidArrayList)
+        # subImageDataList = logic.getSubImageList(bigImageData, divideStep, doValid=True)  # 0.5s
+        # isValidArrayList = [i.isValid for i in subImageDataList]
+        # print np.sum(isValidArrayList)
 
-        # Test `getSubImageInfo`
-        extentIndex = []
-        startTime = time.time()
-        for i in logic.getSubImageInfo(bigImageData, divideStep):
-            extentIndex.append(i)
-        logging.info("--- getSubImageInfo uses %s seconds ---" % (time.time() - startTime))
-
-        print len(extentIndex)
-        extent = tuple(extentIndex[:][:6])  # note the grammar. It is tuple, not numpy
-        index = tuple(extentIndex[:][6:])
-        print len(extent)
-        extent = np.asarray(extentIndex)[:, :6]
-        index = np.asarray(extentIndex)[:, 6:]
-
-        # Get sub-image
-        startTime = time.time()
-        # Method 1: loop (1.409s)
-        # r = []
-        # for i in extent:
-        #     t = logic.getSubImage(i)
-        #     r.append(t)
-        # Method 2: map (1.363s)
-        r = map(logic.getSubImage, extentIndex)
-        # Method 3: multiprocessing (1.572s)
-        # pool = ThreadPool()
-        # r = pool.map(logic.getSubImage, extent)
-        # pool.close()
-        # pool.join()
-        logging.info("--- getSubImage uses %s seconds ---" % (time.time() - startTime))
-
-        subImageDataList = list(r)
+        subImageDataList = logic.getSubImageList(bigImageData, divideStep)
         length = len(subImageDataList)
         print("length: {}".format(length))
         rand = np.random.randint(0, length)
         print("random number: {}".format(rand))
-        print("extent: {}".format(extent[rand]))
         # rand = 1000
         subImage = subImageDataList[rand]
+        print("sn: {}".format(subImage.sn))
         print("index: {}".format(subImage.index))
         print("neighbours: {}".format(subImage.neighbours))
+        print("extent: {}".format(subImage.GetExtent()))
         # print subImage
         # print subImage.getImageInfo()
         #
