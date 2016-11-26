@@ -1174,23 +1174,24 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         for i in range(0, shape[0], step[0]):
             ii += 1
             jj = 0
-            i = i - overlap[0] if i > 0 else i
+            iDelta = i - overlap[0] if i > 0 else i
             for j in range(0, shape[1], step[1]):
                 jj += 1
                 kk = 0
-                j = j - overlap[1] if j > 0 else j
+                jDelta = j - overlap[1] if j > 0 else j
                 for k in range(0, shape[2], step[2]):
                     kk += 1
-                    k = k - overlap[2] if k > 0 else k
-                    subMatrix = bigMatrix[i:i + step[0],
-                                          j:j + step[1],
-                                          k:k + step[2]
+                    kDelta = k - overlap[2] if k > 0 else k
+                    # `overlap` changes the start of span, leaves end intact
+                    subMatrix = bigMatrix[iDelta:i + step[0],
+                                          jDelta:j + step[1],
+                                          kDelta:k + step[2]
                                           ]
                     # NOTE: have a look of `subMatrix.flags`
 
                     # Record the index of subMatrix (VOI extent)
                     x, y, z = subMatrix.shape
-                    voi = (i, i + x, j, j + y, k, k + z)
+                    voi = (iDelta, i + x, jDelta, j + y, kDelta, k + z)
                     index = (ii - 1, jj - 1, kk - 1)
                     # logging.info("index: {}".format(index))
 
@@ -1745,11 +1746,12 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
         logic = DivideImageLogic()
         # divideStep = [22, 33, 44]
-        divideStep = [10] * 3
+        # divideStep = [10] * 3
 
         bigImageData = logic.getImageData(volumeNode)
         shape = bigImageData.GetDimensions()[::-1]  # NOTE: the order
-        # divideStep = np.asarray(shape) / 10
+        divideStep = np.asarray(shape) / 2
+
         print("Info of the bigImageData")
         print("origin: " + str(bigImageData.GetOrigin()))
         print("spacing: " + str(bigImageData.GetSpacing()))
@@ -1759,17 +1761,24 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # isValidArrayList = [i.isValid for i in subImageDataList]
         # print np.sum(isValidArrayList)
 
-        subImageDataList = logic.getSubImageList(bigImageData, divideStep)
+        overlap = [10] * 3
+        subImageDataList = logic.getSubImageList(bigImageData, divideStep, overlap)
         length = len(subImageDataList)
         print("length: {}".format(length))
         rand = np.random.randint(0, length)
         print("random number: {}".format(rand))
-        # rand = 1000
-        subImage = subImageDataList[rand]
-        print("sn: {}".format(subImage.sn))
-        print("index: {}".format(subImage.index))
-        print("neighbours: {}".format(subImage.neighbours))
-        print("extent: {}".format(subImage.GetExtent()))
+        # rand = 7
+        # subImage = subImageDataList[rand]
+        # print("sn: {}".format(subImage.sn))
+        # print("index: {}".format(subImage.index))
+        # print("neighbours: {}".format(subImage.neighbours))
+        # print("extent: {}".format(subImage.GetExtent()))
+
+        for i in subImageDataList:
+            print("sn: {}".format(i.sn))
+            print("index: {}".format(i.index))
+            print("neighbours: {}".format(i.neighbours))
+            print("extent: {}".format(i.GetExtent()))
         # print subImage
         # print subImage.getImageInfo()
         #
