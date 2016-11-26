@@ -1067,20 +1067,12 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
 
         return func_color_transfor, func_opacity_scalar, func_opacity_gradient
 
-    def getVolumeActor(self, vtk_source, volume_prop, mapper_type=0):
+    def getVolumeActor(self, vtk_source, volume_prop):
         """
-        :return: a vtkVolume
+        :return: a vtkVolume actor
         """
-
-        if mapper_type == 0:
-            mapper_volume = vtk.vtkGPUVolumeRayCastMapper()
-        elif mapper_type == 1:
-            mapper_volume = vtk.vtkVolumeTextureMapper()
-        elif mapper_type == 2:
-            mapper_volume = vtk.vtkFixedPointVolumeRayCastMapper()
-        elif mapper_type == 3:
-            mapper_volume = vtk.vtkSmartVolumeMapper()
-            mapper_volume.SetRequestedRenderMode(0)  # 0: DefaultRenderMode
+        mapper_volume = vtk.vtkSmartVolumeMapper()
+        mapper_volume.SetRequestedRenderMode(0)  # 0: DefaultRenderMode. It is the best
 
         # mapper_volume.SetInputConnection(vtk_source.GetOutputPort())
         mapper_volume.SetInputData(vtk_source)
@@ -1164,8 +1156,8 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         output:
             @yield:         10-item <tuple> `extent`, `index` and `sn`
         """
-        if overlap[0] >= step[0] or overlap[1] >= step[1] or overlap[2] >= step[2]:
-            raise AttributeError("Overlap cannot be larger than Step!")
+        if overlap[0] >= step[0] / 2 or overlap[1] >= step[1] / 2 or overlap[2] >= step[2] / 2:
+            raise AttributeError("Overlap is too large!")
 
         # TODO: parallelise the loops for acceleration
         bigMatrix = self.getNdarray(imageData)
@@ -1586,10 +1578,10 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # self.test_VTKLogic()
         # self.test_implicitFunction()
         # self.test_implicitFitting()
-        self.test_getSub()
+        # self.test_getSub()
         # self.test_Extract()
         # self.test_SubMedicalImage()
-        # self.test_SubVolumeRendering()
+        self.test_SubVolumeRendering()
 
     def getDataFromURL(self):
         """
@@ -2184,18 +2176,16 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
     def test_SubVolumeRendering(self):
 
-        # filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
-        # slicer.util.loadVolume(filepath)
-        # volumeNode = slicer.util.getNode(pattern="MR-head")
-        # self.delayDisplay("Image loaded from: " + filepath)
+        filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
+        slicer.util.loadVolume(filepath)
+        volumeNode = slicer.util.getNode(pattern="MR-head")
+        self.delayDisplay("Image loaded from: " + filepath)
 
-        volumeNode = self.getDataFromURL()
+        # volumeNode = self.getDataFromURL()
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
         logic = DivideImageLogic()
-        # divideStep = [22, 33, 44]
-        divideStep = [10] * 3
 
         bigImageData = logic.getImageData(volumeNode)
         print("Info of the bigImageData")
@@ -2203,19 +2193,22 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         print("  spacing: " + str(bigImageData.GetSpacing()))
         print("  extent: " + str(bigImageData.GetExtent()))
 
-        subImageDataList = logic.getSubImageList(bigImageData, divideStep, doValid=False)  # 0.5s
+        # divideStep = [22, 33, 44]
+        # divideStep = [10] * 3
+        shape = bigImageData.GetDimensions()[::-1]
+        divideStep = np.asarray(shape) / 2
+        subImageDataList = logic.getSubImageList(bigImageData, divideStep)  # 0.5s
 
         length = len(subImageDataList)
         rand = np.random.randint(0, length)
+        # rand = 4
         print("random number: " + str(rand))
         # rand = 1000
         subImage = subImageDataList[rand]
-        print subImage.getImageInfo()
-        subImageData = subImage.getImageData()
         print("Info of the subImageData")
-        print("  origin: " + str(subImageData.GetOrigin()))
-        print("  spacing: " + str(subImageData.GetSpacing()))
-        print("  extent: " + str(subImageData.GetExtent()))
+        print("  origin: " + str(subImage.GetOrigin()))
+        print("  spacing: " + str(subImage.GetSpacing()))
+        print("  extent: " + str(subImage.GetExtent()))
 
         # VTK rendering
         vtkLogic = DivideImageVTKLogic()
@@ -2233,7 +2226,7 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         prop_volume.SetDiffuse(0.6)
         prop_volume.SetSpecular(0.2)
 
-        actor = vtkLogic.getVolumeActor(subImageData, prop_volume)
+        actor = vtkLogic.getVolumeActor(subImage, prop_volume)
 
         vtkLogic.addActor(actor)
 
