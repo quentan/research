@@ -1142,7 +1142,11 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
     def _getSubImageInfo(self, imageData, step=[40] * 3, overlap=[0] * 3):
         """
         Get `extent`, `index` and `sn` of every sub-image by the divde step.
-        The first 6 items are `extent`, the last one is `sn`, the other 3 are `index`
+            ```
+            extent = extentIndexSn[:6]
+            index = extentIndexSn[6:-1]
+            sn = tuple(extentIndexSn[-1])
+            ```
         `voi` can be calculated with:
         Denote extent as e, then
             voi = (e4, e5+1, e2, e3+1, e0, e1+1)
@@ -1150,21 +1154,19 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         Usage:
             ```
             extentIndex = []
-            for i in logic.getSubImageInfo(bigImageData):
-                extentIndex.append(i)
-
-            extent = tuple(extentIndex[:, :6])
-            index = tuple(extentIndex[:, 6::])
-            sn = tuple
-
+            for i in self._getSubImageInfo(bigImageData, step, overlap):
+                extentIndexSn.append(i)
             ```
         input:
             @imageData:     big `vtkImageData`
             @step:
-            @overlap
+            @overlap:       it is added at the end of step
         output:
             @yield:         10-item <tuple> `extent`, `index` and `sn`
         """
+        if overlap[0] >= step[0] or overlap[1] >= step[1] or overlap[2] >= step[2]:
+            raise AttributeError("Overlap cannot be larger than Step!")
+
         # TODO: parallelise the loops for acceleration
         bigMatrix = self.getNdarray(imageData)
         shape = bigMatrix.shape
@@ -1174,30 +1176,25 @@ class DivideImageLogic(ScriptedLoadableModuleLogic):
         for i in range(0, shape[0], step[0]):
             ii += 1
             jj = 0
-            iDelta = i - overlap[0] if i > 0 else i
             for j in range(0, shape[1], step[1]):
                 jj += 1
                 kk = 0
-                jDelta = j - overlap[1] if j > 0 else j
                 for k in range(0, shape[2], step[2]):
                     kk += 1
-                    kDelta = k - overlap[2] if k > 0 else k
                     # `overlap` changes the start of span, leaves end intact
-                    subMatrix = bigMatrix[iDelta:i + step[0],
-                                          jDelta:j + step[1],
-                                          kDelta:k + step[2]
+                    subMatrix = bigMatrix[i:i + step[0] + overlap[0],
+                                          j:j + step[1] + overlap[1],
+                                          k:k + step[2] + overlap[2]
                                           ]
                     # NOTE: have a look of `subMatrix.flags`
 
                     # Record the index of subMatrix (VOI extent)
                     x, y, z = subMatrix.shape
-                    voi = (iDelta, i + x, jDelta, j + y, kDelta, k + z)
+                    voi = (i, i + x, j, j + y, k, k + z)
                     index = (ii - 1, jj - 1, kk - 1)
-                    # logging.info("index: {}".format(index))
 
                     # NOTE: the relationship between `voi` and `extent`
                     extent = (voi[4], voi[5] - 1, voi[2], voi[3] - 1, voi[0], voi[1] - 1)
-                    # logging.info("extent: {}".format(extent))
 
                     yield extent + index + (sn,)
                     sn = sn + 1
