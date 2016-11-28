@@ -976,7 +976,7 @@ class DivideImageVTKLogic(ScriptedLoadableModuleLogic):
 
         iren.Start()
 
-    def getTransferFuncFromFile(self, color_file, opacity = 0.25):
+    def getTransferFuncFromFile(self, color_file, opacity=0.25):
         """
         Return transfer function from file for volume rendering
         @param      a `cvs` file containing colours
@@ -2014,7 +2014,6 @@ class DivideImageTest(ScriptedLoadableModuleTest):
         # spacing = imageData.GetSpacing()
         # origin = imageData.GetOrigin()
 
-
         #
         # Start: VTK rendering
         vtkLogic = DivideImageVTKLogic()
@@ -2176,12 +2175,12 @@ class DivideImageTest(ScriptedLoadableModuleTest):
 
     def test_SubVolumeRendering(self):
 
-        filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
-        slicer.util.loadVolume(filepath)
-        volumeNode = slicer.util.getNode(pattern="MR-head")
-        self.delayDisplay("Image loaded from: " + filepath)
+        # filepath = "/Users/Quentan/Box Sync/IMAGE/MR-head.nrrd"
+        # slicer.util.loadVolume(filepath)
+        # volumeNode = slicer.util.getNode(pattern="MR-head")
+        # self.delayDisplay("Image loaded from: " + filepath)
 
-        # volumeNode = self.getDataFromURL()
+        volumeNode = self.getDataFromURL()
         moduleWidget = slicer.modules.DivideImageWidget
         moduleWidget.volumeSelector1.setCurrentNode(volumeNode)
 
